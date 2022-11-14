@@ -446,7 +446,36 @@ def plot_sol(alphadf, t_max=2, px=None, py=None):
   
   input("PRESS ANY KEY TO QUIT")
 
+def alphadf(t):
+  # Input alpha function (for sim & plot)
+
+  # OLD:
+  # alphaddf = lambda t: 1 if (t < 0.5) else 0
+  # alphadf = lambda t: spi.quad(alphaddf, 0, t, limit=100)[0]
+  # alphaf = lambda t: spi.quad(alphadf, 0, t, limit=100)[0]
+  #alphadf = lambda t: 1 if (t < 0.5) else 0
+  #alphadf = lambda t: (((1 if (t < 0.5) else 0) if (t<1.5) else -1) if (t<2) else 0)
+  #alphadf = lambda t: np.sin(t*np.pi - np.pi/2)
+  #alphadf = lambda t: signal.square(2*np.pi*t)
+  # if t < 1:
+    # return 1
+  # elif t < 1.5:
+    # return 2
+  # elif t < 2:
+    # return -1
+  # # elif t < 2.5:
+    # # return 0
+  # # elif t < 3:
+    # # return -1
+  # else:
+    # return 0
+  
+  return -np.exp(.1*t) + 4*np.exp(-t)
+
 def valphadf(t, v):
+  """ Input alphad function, parameterized for optimization
+  """
+  
   # Input: alpha = p0 + p1*t + sum(ai*cos(wi+phii))
   # v0 = np.array([p0, p1, a1, a2, w1, w2, phi1, phi2])
   return v[0] + v[1]*t + v[1]*np.cos(v[3]*t+v[5]) + v[2]*np.cos(v[4]*t+v[6])
@@ -465,7 +494,7 @@ def optimize_alpha(Mfs, Ffs, tv, rx_goal, ry_goal, fname="opt_res.dill"):
   
   # Input: alpha = p0 + p1*t + sum(ai*cos(wi+phii))
   # v0 = np.array([p0, p1, a1, a2, w1, w2, phi1, phi2])
-  bounds = [(0,2), (0,2), (0,2), (0,2), (1e-4,10), (1e-4,10), (0,np.pi), 
+  bounds = [(-2,2), (-2,2), (0,2), (0,2), (1e-4,10), (1e-4,10), (0,np.pi), 
     (0,np.pi)]
 
   def cost(v):
@@ -481,8 +510,7 @@ def optimize_alpha(Mfs, Ffs, tv, rx_goal, ry_goal, fname="opt_res.dill"):
     
     return c
   
-  # Optimize
-  # https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.shgo.html#scipy.optimize.shgo
+  # Optimize. See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.shgo.html#scipy.optimize.shgo
   res = spo.shgo(cost, bounds, n=32, sampling_method='sobol',
     minimizer_kwargs={"options":{"tol":.1}})
   
@@ -509,35 +537,10 @@ if __name__ == "__main__":
   tv = np.linspace(0,1,100)
   #rx_goal = tv/4
   #rx_goal = 1/(1+np.exp(-(10*tv-5))) - 1/(1+np.exp(5))
-  rx_goal = tv*np.cos(2*np.pi*tv)
+  rx_goal = tv*np.cos(np.pi*tv)
   #ry_goal = np.zeros(tv.shape)
   #ry_goal = 2/(1+np.exp(-(10*tv-5))) - 2/(1+np.exp(5))
-  ry_goal = tv*np.sin(2*np.pi*tv)
-  
-  # Input alpha function (for sim & plot)
-  def alphadf(t):
-    # OLD:
-    # alphaddf = lambda t: 1 if (t < 0.5) else 0
-    # alphadf = lambda t: spi.quad(alphaddf, 0, t, limit=100)[0]
-    # alphaf = lambda t: spi.quad(alphadf, 0, t, limit=100)[0]
-    #alphadf = lambda t: 1 if (t < 0.5) else 0
-    #alphadf = lambda t: (((1 if (t < 0.5) else 0) if (t<1.5) else -1) if (t<2) else 0)
-    #alphadf = lambda t: np.sin(t*np.pi - np.pi/2)
-    #alphadf = lambda t: signal.square(2*np.pi*t)
-    # if t < 1:
-      # return 1
-    # elif t < 1.5:
-      # return 2
-    # elif t < 2:
-      # return -1
-    # # elif t < 2.5:
-      # # return 0
-    # # elif t < 3:
-      # # return -1
-    # else:
-      # return 0
-    
-    return -np.exp(.1*t) + 4*np.exp(-t)
+  ry_goal = tv*np.sin(np.pi*tv)
   
   if derive:
     print(" -- Deriving the EOM -- ")
