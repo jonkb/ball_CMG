@@ -374,10 +374,12 @@ def plot_sol(alphadf, t_max=2, px=None, py=None):
   alphaf = lambda t: spi.quad(alphadf, 0, t, limit=100)[0]
 
   fig, axs = plt.subplots(3,2, sharex=True)
+  alphad = [alphadf(ti) for ti in t]
+  axs[0,0].plot(t, alphad)
+  axs[0,0].set_title(r"Gyro angle rate $\dot{\alpha}$ (rad/s)")
   alpha = [alphaf(ti) for ti in t]
-  axs[0,0].plot(t, alpha)
-  axs[0,0].set_title(r"Gyro angle $\alpha$ (rad)")
-  axs[0,1].set_title(r"Nothing (for now)")
+  axs[0,1].plot(t, alpha)
+  axs[0,1].set_title(r"Gyro angle $\alpha$ (rad)")
   axs[1,0].plot(t, x[0,:], label="nu")
   axs[1,0].plot(t, x[1,:], label="ex")
   axs[1,0].plot(t, x[2,:], label="ey")
@@ -481,7 +483,7 @@ def optimize_alpha(Mfs, Ffs, tv, rx_goal, ry_goal, fname="opt_res.dill"):
   
   # Optimize
   # https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.shgo.html#scipy.optimize.shgo
-  res = spo.shgo(cost, bounds, n=16, sampling_method='sobol',
+  res = spo.shgo(cost, bounds, n=32, sampling_method='sobol',
     minimizer_kwargs={"options":{"tol":.1}})
   
   if fname is not None:
