@@ -1,4 +1,0 @@
-Open in Ubuntu
-
-cd /mnt/c/Users/jonat/Dropbox/Documents/Engineering/ball_CMG/py
-
