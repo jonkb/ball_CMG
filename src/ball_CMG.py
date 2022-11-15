@@ -1,6 +1,18 @@
 """
-Finding EOM for ball_CMG
+Simulating a robot composed of a ball with a Control Moment Gyroscope (CMG) mounted inside.
+
+Capabilities:
+1. Derive the EOM
+2. Simulate the path of the robot
+3. Plot simulation results
+4. Optimize the input angle (alpha) to attempt to trace a given path
+
+Currently, the user specifies which of those to perform by setting the booleans at the beginning of the main block at the end of the file.
+
+The strategy behind the dynamics was mostly adapted from the following paper by Putkaradze & Rogers:
+https://link.springer.com/article/10.1007/s11012-018-0904-5#Sec11
 """
+
 from matplotlib import pyplot as plt
 from matplotlib import animation
 import numpy as np
@@ -27,6 +39,7 @@ def flat(q):
   Takes a quaternion and turns it into an R3 vector
   """
   return sp.Matrix([[q.b], [q.c], [q.d]])
+
 
 def derive_EOM():
   """ Derive the equations of motion and save them to file
@@ -480,7 +493,14 @@ def valphadf(t, v):
   # v0 = np.array([p0, p1, a1, a2, w1, w2, phi1, phi2])
   return v[0] + v[1]*t + v[1]*np.cos(v[3]*t+v[5]) + v[2]*np.cos(v[4]*t+v[6])
 
-def optimize_alpha(Mfs, Ffs, tv, rx_goal, ry_goal, fname="opt_res.dill"):
+def optimize_pos(Mfs, Ffs, tmax, x_goal, y_goal, fname="opt_pos_res.dill"):
+  """ Like optimize_path, but only care about a target position
+  For now, the goal is to be stopped at the target
+  """
+  # TODO
+  pass
+
+def optimize_path(Mfs, Ffs, tv, rx_goal, ry_goal, n=32, fname="opt_path_res.dill"):
   """ Currently, the target path is defined here
   TODO: pass target path as argument
   """
@@ -494,7 +514,7 @@ def optimize_alpha(Mfs, Ffs, tv, rx_goal, ry_goal, fname="opt_res.dill"):
   
   # Input: alpha = p0 + p1*t + sum(ai*cos(wi+phii))
   # v0 = np.array([p0, p1, a1, a2, w1, w2, phi1, phi2])
-  bounds = [(-2,2), (-2,2), (0,2), (0,2), (1e-4,10), (1e-4,10), (0,np.pi), 
+  bounds = [(-2,2), (-4,4), (0,4), (0,4), (1e-4,10), (1e-4,10), (0,np.pi), 
     (0,np.pi)]
 
   def cost(v):
@@ -511,7 +531,7 @@ def optimize_alpha(Mfs, Ffs, tv, rx_goal, ry_goal, fname="opt_res.dill"):
     return c
   
   # Optimize. See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.shgo.html#scipy.optimize.shgo
-  res = spo.shgo(cost, bounds, n=32, sampling_method='sobol',
+  res = spo.shgo(cost, bounds, n=n, sampling_method='sobol',
     minimizer_kwargs={"options":{"tol":.1}})
   
   if fname is not None:
@@ -524,23 +544,25 @@ def optimize_alpha(Mfs, Ffs, tv, rx_goal, ry_goal, fname="opt_res.dill"):
 
 if __name__ == "__main__":
   # Derive the equations of motion and save them to file
-  
   derive = False
+  # Simulate the response of the system to the input alphadf
   sim = False
+  # Plot sol.dill
   plot = False
-  optimize = True
+  # Optimize the input angle (alpha) to attempt to trace a given path
+  optimize = False
+  # Plot sol.dill and the alpha from opt_res.dill
   plot_opt = False
   
-  t_max = 1
-  
+  t_max = 2
+  tv = np.linspace(0,t_max,100)
   # Target path (for optimize)
-  tv = np.linspace(0,1,100)
   #rx_goal = tv/4
   #rx_goal = 1/(1+np.exp(-(10*tv-5))) - 1/(1+np.exp(5))
-  rx_goal = tv*np.cos(np.pi*tv)
+  rx_goal = tv*np.cos(2*np.pi*tv)
   #ry_goal = np.zeros(tv.shape)
   #ry_goal = 2/(1+np.exp(-(10*tv-5))) - 2/(1+np.exp(5))
-  ry_goal = tv*np.sin(np.pi*tv)
+  ry_goal = tv*np.sin(2*np.pi*tv)
   
   if derive:
     print(" -- Deriving the EOM -- ")
@@ -564,10 +586,11 @@ if __name__ == "__main__":
       M, F = load_MF()
     Mfs, Ffs = lambdify_MF(M, F, Omega_gyro=1000)
     print(" -- Optimize input -- ")
-    res = optimize_alpha(Mfs, Ffs, tv, rx_goal, ry_goal)
+    res = optimize_path(Mfs, Ffs, tv, rx_goal, ry_goal, n=128)
     print(res)
     
   if plot_opt:
+    print(" -- Plotting -- ")
     with open("opt_res.dill", "rb") as file:
       res = dill.load(file)
     alphadf = lambda t: valphadf(t, res.x)
