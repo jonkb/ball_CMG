@@ -58,6 +58,9 @@ def alphaddf(t):
   #return np.sin(4*np.pi*t) + 2*(t-1)
   return .5*t
 
+def alphadf(t):
+  return t**2/4
+
 def valphaddf(t, v):
   """ Input alphadd function, parameterized for optimization
   """
@@ -84,7 +87,7 @@ def simulate(Mfs, Ffs, alphaddf, t_max=2, x0=None, R_sphere=0.05,
   def xdot(t, x):
     """ State variable EOM
     x is a (9,) numpy array of the state variables
-    x = (nu, ex, ey, ez, omega_x, omega_y, omega_z, rx, ry, alpha, alphad)
+    x = (eta, ex, ey, ez, omega_x, omega_y, omega_z, rx, ry, alpha, alphad)
     """
     
     xd = np.zeros(11)
@@ -163,7 +166,7 @@ def simulate_old(Mfs, Ffs, alphadf, t_max=2, R_sphere=0.05, fname="sol.dill"):
   #print("alphaf(1):", alphaf(1))
 
   # Convert input vector to symbolic substitutions
-  # in: xin = (t, nu, ex, ey, ez, omega_x, omega_y, omega_z, rx__0, ry__0)
+  # in: xin = (t, eta, ex, ey, ez, omega_x, omega_y, omega_z, rx__0, ry__0)
   # out: xs = (xi[1], xi[2], xi[3], xi[4], xi[5], xi[6], xi[7], rx__0, ry__0, alphaf(xi[0]), alphadf(xi[0]), alphaddf(xi[0]))
   xin_to_xs = lambda xin: tuple([*xin[1:], alphaf(xin[0]), alphadf(xin[0]), 
     alphaddf(xin[0])])
@@ -174,7 +177,7 @@ def simulate_old(Mfs, Ffs, alphadf, t_max=2, R_sphere=0.05, fname="sol.dill"):
   def xdot(t, x):
     """ State variable EOM
     x is a (9,) numpy array of the state variables
-    x = (nu, ex, ey, ez, omega_x, omega_y, omega_z, rx__0, ry__0)
+    x = (eta, ex, ey, ez, omega_x, omega_y, omega_z, rx__0, ry__0)
     """
     
     xd = np.zeros(9)
@@ -286,7 +289,7 @@ if __name__ == "__main__":
   # Plot sol.dill and the alpha from opt_res.dill
   plot_opt = False
   
-  t_max = 1
+  t_max = 4
   tv = np.linspace(0,t_max,100)
   # Target path (for optimize)
   #rx_goal = tv/4
@@ -313,6 +316,7 @@ if __name__ == "__main__":
     Mfs, Ffs = dyn.lambdify_MF(M, F, Omega_g=1000)
     toc(times)
     sol = simulate(Mfs, Ffs, alphaddf, t_max=t_max, fname=sol_fname)
+    #sol = simulate_old(Mfs, Ffs, alphadf, t_max=t_max, fname=sol_fname)
     toc(times, "Simulation")
   
   if plot_sol:

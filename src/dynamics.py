@@ -74,7 +74,7 @@ def derive_EOM(save=True):
 
   # Substitute q-dot (time derivative of quaternion) in terms of omega
   qdot = sharp(spn.omega_s__0) * spn.q / 2
-  qdsubs = {spn.nud: qdot.a, spn.exd: qdot.b, spn.eyd: qdot.c, 
+  qdsubs = {spn.etad: qdot.a, spn.exd: qdot.b, spn.eyd: qdot.c, 
     spn.ezd: qdot.d}
   EOM1 = EOM1.subs(qdsubs).expand()
   EOM2 = EOM2.subs(qdsubs).expand()

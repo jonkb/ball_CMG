@@ -56,7 +56,7 @@ def plot_sol(sol, t, alphaddf, show=True, animate=True, px=None, py=None):
   axs[0,1].legend()
   axs[0,1].set_title(r"Gyro angle & velocity $\alpha$, $\dot{\alpha}$")
   # 1,0
-  axs[1,0].plot(t, x[0,:], label=r"$\nu$")
+  axs[1,0].plot(t, x[0,:], label=r"$\eta$")
   axs[1,0].plot(t, x[1,:], label=r"$\varepsilon_x$")
   axs[1,0].plot(t, x[2,:], label=r"$\varepsilon_y$")
   axs[1,0].plot(t, x[3,:], label=r"$\varepsilon_z$")

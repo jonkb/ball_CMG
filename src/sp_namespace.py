@@ -28,15 +28,15 @@ omega_xdd = sp.diff(omega_x, (t,2))
 omega_ydd = sp.diff(omega_y, (t,2))
 omega_zdd = sp.diff(omega_z, (t,2))
 # Define orientation with a quaternion
-nu = sp.Function("nu")(t)
+eta = sp.Function("eta")(t)
 ex = sp.Function("ex")(t)
 ey = sp.Function("ey")(t)
 ez = sp.Function("ez")(t)
-nud = sp.diff(nu,t)
+etad = sp.diff(eta,t)
 exd = sp.diff(ex,t)
 eyd = sp.diff(ey,t)
 ezd = sp.diff(ez,t)
-q = Quaternion(nu, ex, ey, ez)
+q = Quaternion(eta, ex, ey, ez)
 # Angular velocity
 #_s: of sphere; __s: in sphere frame; __0 in global frame
 omega_s__s = sp.Matrix([[omega_x], [omega_y], [omega_z]])
@@ -60,5 +60,5 @@ q_g__s = Quaternion.from_axis_angle((0,0,1), alpha)
 omega_g__g = flat((q_g__s * sharp(omega_g__s) * conjugate(q_g__s)).expand())
 
 # Symbolic state vector (-s in xs for "symbolic")
-xs = (nu, ex, ey, ez, omega_x, omega_y, omega_z, rx__0, ry__0, alpha, alphad, 
+xs = (eta, ex, ey, ez, omega_x, omega_y, omega_z, rx__0, ry__0, alpha, alphad, 
   alphadd)
