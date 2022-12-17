@@ -7,7 +7,7 @@ from scipy.misc import derivative as spd
 from matplotlib import pyplot as plt
 from matplotlib import animation
 
-def plot_sol(sol, t, alphadf, show=True, animate=True, px=None, py=None):
+def plot_sol(sol, t, alphaddf, show=True, animate=True, px=None, py=None):
   """ Plots sol.dill
     TODO: Make sol a parameter
   
@@ -17,7 +17,7 @@ def plot_sol(sol, t, alphadf, show=True, animate=True, px=None, py=None):
     If None, attempt to load from sol.dill
   t: time vector
     If None, then use sol.t
-  alphadf: input (alpha-dot) function used to create simulation
+  alphaddf: input (alpha-double-dot) function used to create simulation
   show (bool): Whether to show the plots now or just return the fig objects
   animate (bool): Whether to plot animation
   px, py: target path (px,py), plotted for reference behind animation
@@ -41,29 +41,30 @@ def plot_sol(sol, t, alphadf, show=True, animate=True, px=None, py=None):
       print(f"\tsol.t = [{tmin}, {tmax}]")
       print(f"\tt = [{min(t)}, {max(t)}]")
   
-  # Evaluate solution at desired time values
+  # Evaluate solution & input at desired time values
   x = sol.sol(t)
-  
-  # Integrate & differentiate alphad
-  alphaddf = lambda t: spd(alphadf, t, dx=1e-6)
-  alphaf = lambda t: spi.quad(alphadf, 0, t, limit=100)[0]
+  alphadd = alphaddf(t)
 
-  # Plot
+  ## Plot
   fig1, axs = plt.subplots(3,2, sharex=True)
-  alphad = [alphadf(ti) for ti in t]
-  axs[0,0].plot(t, alphad)
-  axs[0,0].set_title(r"Gyro angle rate $\dot{\alpha}$ (rad/s)")
-  alpha = [alphaf(ti) for ti in t]
-  axs[0,1].plot(t, alpha)
-  axs[0,1].set_title(r"Gyro angle $\alpha$ (rad)")
-  axs[1,0].plot(t, x[0,:], label="nu")
-  axs[1,0].plot(t, x[1,:], label="ex")
-  axs[1,0].plot(t, x[2,:], label="ey")
-  axs[1,0].plot(t, x[3,:], label="ez")
+  # 0,0 - Input alpha acceleration
+  axs[0,0].plot(t, alphadd)
+  axs[0,0].set_title(r"Input gyro acceleration $\ddot{\alpha}$")
+  # 0,1 
+  axs[0,1].plot(t, x[9,:], label=r"$\alpha$")
+  axs[0,1].plot(t, x[10,:], label=r"$\dot{\alpha}$")
+  axs[0,1].legend()
+  axs[0,1].set_title(r"Gyro angle & velocity $\alpha$, $\dot{\alpha}$")
+  # 1,0
+  axs[1,0].plot(t, x[0,:], label=r"$\nu$")
+  axs[1,0].plot(t, x[1,:], label=r"$\varepsilon_x$")
+  axs[1,0].plot(t, x[2,:], label=r"$\varepsilon_y$")
+  axs[1,0].plot(t, x[3,:], label=r"$\varepsilon_z$")
   qnorm = np.linalg.norm(x[0:4,:], axis=0)
   axs[1,0].plot(t, qnorm, label="|q|")
   axs[1,0].legend()
   axs[1,0].set_title("Orientation Q")
+  # 1,1
   axs[1,1].plot(t, x[4,:], label="$\omega_x$")
   axs[1,1].plot(t, x[5,:], label="$\omega_y$")
   axs[1,1].plot(t, x[6,:], label="$\omega_z$")
@@ -71,9 +72,11 @@ def plot_sol(sol, t, alphadf, show=True, animate=True, px=None, py=None):
   axs[1,1].plot(t, wnorm, label="|$\omega$|")
   axs[1,1].legend()
   axs[1,1].set_title("Angular Velocity $\omega$")
+  # 2,0
   axs[2,0].plot(t, x[7,:])
   axs[2,0].set_xlabel("Time t")
   axs[2,0].set_title("X-Position $r_x$")
+  # 2,1
   axs[2,1].plot(t, x[8,:])
   axs[2,1].set_xlabel("Time t")
   axs[2,1].set_title("Y-Position $ry$")

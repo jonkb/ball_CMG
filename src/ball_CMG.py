@@ -10,7 +10,6 @@ Capabilities:
 Currently, the user specifies which of those to perform by setting the booleans at the beginning of the main block at the end of the file.
 
 TODO
-* Split things up into a logical file structure
 * Try feedforward control
   * Solve dynamics for alphad... probably numerically
 """
@@ -28,7 +27,7 @@ import dill
 import plot
 import dynamics as dyn
 
-def alphadf(t):
+def alphaddf(t):
   # Input alpha function (for sim & plot)
 
   # OLD:
@@ -54,17 +53,93 @@ def alphadf(t):
   
   #return -np.exp(.1*t) + 4*np.exp(-t)
   
-  return np.cos(4*np.pi*t) + 8*t/2 - 4*t**2
+  #return np.cos(4*np.pi*t) + 8*t/2 - 4*t**2
+  
+  #return np.sin(4*np.pi*t) + 2*(t-1)
+  return .5*t
 
-def valphadf(t, v):
-  """ Input alphad function, parameterized for optimization
+def valphaddf(t, v):
+  """ Input alphadd function, parameterized for optimization
   """
   
   # Input: alpha = p0 + p1*t + sum(ai*cos(wi+phii))
   # v0 = np.array([p0, p1, a1, a2, w1, w2, phi1, phi2])
   return v[0] + v[1]*t + v[1]*np.cos(v[3]*t+v[5]) + v[2]*np.cos(v[4]*t+v[6])
 
-def simulate(Mfs, Ffs, alphadf, t_max=2, R_sphere=0.05, fname="sol.dill"):
+def simulate(Mfs, Ffs, alphaddf, t_max=2, x0=None, R_sphere=0.05, 
+    fname="sol.dill"):
+  """ Simulate the CMG ball
+  Parameters:
+    Mfs: Lambdified, symbolic mass matrix
+    Ffs: Lambdified, symbolic force vector
+    alphaddf: Acceleration of alpha as a function of time
+  """
+
+  print("Solving IVP")
+  # Initial conditions
+  if x0 is None:
+    x0 = np.zeros(11)
+    x0[0] = 1 # Real part of quaternion starts at 1
+  
+  def xdot(t, x):
+    """ State variable EOM
+    x is a (9,) numpy array of the state variables
+    x = (nu, ex, ey, ez, omega_x, omega_y, omega_z, rx, ry, alpha, alphad)
+    """
+    
+    xd = np.zeros(11)
+    alphadd = alphaddf(t)
+    
+    # Equations 1-4: Orientation quaternion:
+    # NOTE: Maybe this part should be switched to use numpy quaternions
+    q = Quaternion(x[0], x[1], x[2], x[3])
+    omega_s__s = [x[4], x[5], x[6]]
+    omega_s__0 = flat((q * sharp(omega_s__s) * conjugate(q)).expand())
+    qdot = sharp(omega_s__0) * q / 2
+    xd[0] = float(qdot.a)
+    xd[1] = float(qdot.b)
+    xd[2] = float(qdot.c)
+    xd[3] = float(qdot.d)
+    
+    # Equations 5-7: omega-dot from EOM.
+    M = Mfs(*x, alphadd)
+    F = Ffs(*x, alphadd)
+    # [M]{qddot} = {F}
+    sol = np.linalg.lstsq(M, F, rcond=None)
+    # d/dt([omega_x, omega_y, omega_z) = qddot = sol[0]
+    # (This is because the omegas are generalized velocities)
+    xd[4:7] = sol[0][:,0]
+    
+    # Equations 8-9: rx, ry
+    # These come from the constraint equation: (-Rk) x Omega
+    xd[7] = R_sphere*omega_s__0[1,0]
+    xd[8] = -R_sphere*omega_s__0[0,0]
+    
+    # Equations 10-11: alpha, alphad
+    #   Integrate the provided alphaddf input function
+    xd[9] = x[10]
+    xd[10] = alphadd
+    
+    # print("t:",t)
+    # print("x:",x)
+    # print("xd:",xd)
+    return xd
+
+  # print("xdot(0): ", xdot(0,x0))
+  # print("xdot(0.1): ", xdot(0.1,x0))
+
+  sol = spi.solve_ivp(xdot, [0,t_max], x0, dense_output=True, rtol=1e-4, 
+    atol=1e-7)
+
+  if fname is not None:
+    # Save to file
+    with open(fname,"wb") as file:
+      dill.dump(sol, file)
+    print(f"IVP solution saved to {fname}")
+
+  return sol
+
+def simulate_old(Mfs, Ffs, alphadf, t_max=2, R_sphere=0.05, fname="sol.dill"):
   """ Simulate the CMG ball
   Parameters:
     Mfs: Lambdified, symbolic mass matrix
@@ -200,8 +275,8 @@ def optimize_path(Mfs, Ffs, tv, rx_goal, ry_goal, n=32, fname="opt_path_res.dill
 
 if __name__ == "__main__":
   # Derive the equations of motion and save them to file
-  derive = True
-  # Simulate the response of the system to the input alphadf
+  derive = False
+  # Simulate the response of the system to the input alphaddf
   sim = True
   # Plot the solution path
   plot_sol = True
@@ -237,7 +312,7 @@ if __name__ == "__main__":
     print(" -- Simulating -- ")
     Mfs, Ffs = dyn.lambdify_MF(M, F, Omega_g=1000)
     toc(times)
-    sol = simulate(Mfs, Ffs, alphadf, t_max=t_max, fname=sol_fname)
+    sol = simulate(Mfs, Ffs, alphaddf, t_max=t_max, fname=sol_fname)
     toc(times, "Simulation")
   
   if plot_sol:
@@ -245,7 +320,7 @@ if __name__ == "__main__":
       with open(sol_fname, "rb") as file:
         sol = dill.load(file)
     print(" -- Plotting -- ")
-    plot.plot_sol(sol, tv, alphadf)
+    plot.plot_sol(sol, tv, alphaddf)
   
   if optimize:
     if not derive:
@@ -262,8 +337,8 @@ if __name__ == "__main__":
     print(" -- Plotting -- ")
     with open("opt_res.dill", "rb") as file:
       res = dill.load(file)
-    alphadf = lambda t: valphadf(t, res.x)
-    plot.plot_sol(sol, tv, alphadf, px=rx_goal, py=ry_goal)
+    alphaddf = lambda t: valphaddf(t, res.x)
+    plot.plot_sol(sol, tv, alphaddf, px=rx_goal, py=ry_goal)
   
   print(" -- DONE -- ")
   toc(times, "Total execution", total=True)
