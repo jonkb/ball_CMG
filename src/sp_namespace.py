@@ -62,3 +62,5 @@ omega_g__g = flat((q_g__s * sharp(omega_g__s) * conjugate(q_g__s)).expand())
 # Symbolic state vector (-s in xs for "symbolic")
 xs = (eta, ex, ey, ez, omega_x, omega_y, omega_z, rx__0, ry__0, alpha, alphad, 
   alphadd)
+# Substitution vector for ax & ay
+s_axay = (eta, ex, ey, ez, omega_x, omega_y, omega_z, etad, exd, eyd, ezd, omega_xd, omega_yd, omega_zd)

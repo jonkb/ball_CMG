@@ -150,10 +150,10 @@ def lambdify_MF(M, F, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600):
   F = F.subs(consts)
 
   # Lambdified functions for M and F
-  Mfs = sp.lambdify(spn.xs, M, "numpy") # spn.xs: symbolic state vector
-  Ffs = sp.lambdify(spn.xs, F, "numpy")
+  Mf = sp.lambdify(spn.xs, M, "numpy") # spn.xs: symbolic state vector
+  Ff = sp.lambdify(spn.xs, F, "numpy")
 
-  return Mfs, Ffs
+  return Mf, Ff
 
 def load_MF():
   """ Load M & F from M.srepr, F.srepr
@@ -167,3 +167,51 @@ def load_MF():
     F_str = file.read()
     F = sp.sympify(F_str)
   return M, F
+
+def find_axay(M, F, save=True):
+  """ Find cartesian acceleration in the world frame.
+  rx-dot = R_sphere*omega_s__0[1,0]
+  ry-dot = -R_sphere*omega_s__0[0,0]
+  """
+  
+  printv(1, "Solving for acceleration")
+  import sp_namespace as spn
+  # Differentiate
+  ax = sp.diff(spn.rxd__0, spn.t)
+  ay = sp.diff(spn.ryd__0, spn.t)
+  
+  if save:
+    printv(1, "Saving to file")
+    with open("ax.srepr","w") as file:
+      file.write(sp.srepr(ax))
+    with open("ay.srepr","w") as file:
+      file.write(sp.srepr(ay))
+    printv(1, "ax & ay saved to file")
+  
+  return ax, ay
+
+def load_axay():
+  """ Load ax & ay from ax.srepr, ay.srepr
+  Assumes those files exist
+  """
+  
+  with open("ax.srepr", "r") as file:
+    ax = sp.sympify(file.read())
+  with open("ay.srepr", "r") as file:
+    ay = sp.sympify(file.read())
+  return ax, ay
+
+def lambdify_axay(ax, ay, Rs=0.05):
+  printv(1, "Lambdifying accelerations")
+  import sp_namespace as spn
+
+  # Make the substitutions for everything that's not a state variable
+  consts = {spn.Rs: Rs}
+  ax = ax.subs(consts)
+  ay = ay.subs(consts)
+
+  # Lambdified functions for M and F
+  axf = sp.lambdify(spn.s_axay, ax, "numpy") # spn.xs: symbolic state vector
+  ayf = sp.lambdify(spn.s_axay, ay, "numpy")
+
+  return axf, ayf

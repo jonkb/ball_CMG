@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 from matplotlib import animation
 
 def plot_sol(sol, t, alphaddf, show=True, animate=True, px=None, py=None):
+    #a_desf=None):
   """ Plots sol.dill
     TODO: Make sol a parameter
   
@@ -43,7 +44,11 @@ def plot_sol(sol, t, alphaddf, show=True, animate=True, px=None, py=None):
   
   # Evaluate solution & input at desired time values
   x = sol.sol(t)
-  alphadd = alphaddf(t)
+  if alphaddf is None:
+    # Differentiate alphad
+    alphadd = np.gradient(x[10,:], t)
+  else:
+    alphadd = alphaddf(t)
 
   ## Plot
   fig1, axs = plt.subplots(3,2, sharex=True)
@@ -94,6 +99,14 @@ def plot_sol(sol, t, alphaddf, show=True, animate=True, px=None, py=None):
   ymin -= .1*yspan
   ymax += .1*yspan
   
+  # if a_desf is not None:
+    # # Convert a_desf to px, py
+    # v_xy = lambda ti: spi.quad_vec(a_desf, min(t), ti)[0]
+    # p_xy = lambda ti: spi.quad_vec(v_xy, min(t), ti)[0]
+    # pxy = np.vstack([p_xy(ti) for ti in t])
+    # px = pxy[:,0]
+    # py = pxy[:,1]
+  
   # Animate
   # https://jakevdp.github.io/blog/2012/08/18/matplotlib-animation-tutorial/
   fig2 = plt.figure()
@@ -102,7 +115,8 @@ def plot_sol(sol, t, alphaddf, show=True, animate=True, px=None, py=None):
   ax.set_aspect("equal")
   ax.grid()
   if (px is not None) and (py is not None):
-    ph, = ax.plot(px, py, linestyle="-", color="g")
+    print(px, py)
+    ph, = ax.plot(px, py, linestyle="-", color="g", marker=".")
   rh = ax.scatter([], [], s=5, color="b", marker=".")
   circle, = ax.plot([0], [0], marker="o", markerfacecolor="b")
 
