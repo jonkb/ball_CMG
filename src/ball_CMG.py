@@ -13,7 +13,8 @@ TODO
 * Try feedforward control
   * Solve dynamics for alphad... probably numerically
 * Idea: characterize the relationship between the state of the robot 
-  and the effect of applying an alphadd
+  and the effect of applying an alphadd.
+  Learn the mapping (x[0:7], xd[0:7]) => (ax, ay) with ML?
 """
 
 import numpy as np
@@ -204,20 +205,20 @@ def simulate(Mf, Ff, alphaddf, axf=None, ayf=None, a_desf=None, t_max=2,
 
   return sol
 
-def simulate_old(Mf, Ff, alphadf, t_max=2, R_sphere=0.05, fname="sol.dill"):
+def simulate_old(Mf, Ff, alphadf, t_max=2, x0=None, R_sphere=0.05, 
+    fname="sol.dill"):
   """ Simulate the CMG ball
   Parameters:
     Mf: Lambdified, symbolic mass matrix
     Ff: Lambdified, symbolic force vector
+    alphadf: alpha-dot function
   
-  Defined below: (Should probably be parameters) TODO
-    Initial conditions: x0
-    Gyro angle alpha: alphaf, alphadf, alphaddf
   """
 
   print("Solving IVP")
   # Initial conditions
-  x0 = np.array([1,0,0,0,0,0,0,0,0])
+  if x0 is None:
+    x0 = np.array([1,0,0,0,0,0,0,0,0])
   
   # NOTE: Should I include alpha & derivatives in the state vector equation
   # Input alpha function int & der
@@ -391,7 +392,7 @@ if __name__ == "__main__":
         sol = dill.load(file)
     print(" -- Plotting -- ")
     p_des = p_desf(tv)
-    print(p_des)
+    #print(p_des)
     px = p_des[0,:]
     py = p_des[1,:]
     plot.plot_sol(sol, tv, alphaddf=None, px=px, py=py)
@@ -404,7 +405,7 @@ if __name__ == "__main__":
     print(" -- Optimize input -- ")
     toc(times)
     res = optimize_path(Mf, Ff, tv, rx_goal, ry_goal, n=128)
-    print(res)
+    #print(res)
     toc(times, "Simulation")
   
   if plot_opt:

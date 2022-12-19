@@ -8,6 +8,8 @@ https://link.springer.com/article/10.1007/s11012-018-0904-5#Sec11
 import sympy as sp
 from util import sharp, flat, printv
 
+from CMGBall import CMGBall
+
 def derive_EOM(save=True):
   """ Derive the equations of motion and save them to file
   Parameters
@@ -130,7 +132,7 @@ def derive_EOM(save=True):
   
   return M, F
 
-def lambdify_MF(M, F, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600):
+def lambdify_MF(M, F, ball=CMGBall()):
   """ Lambdify M & F
   The numerical arguments are constants to be substituted into M & F
     before converting them to numpy lambdified functions.
@@ -144,8 +146,8 @@ def lambdify_MF(M, F, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600):
   import sp_namespace as spn
 
   # Make the substitutions for everything that's not a state variable
-  consts = {spn.Is: Is, spn.Ig1: Ig1, spn.Ig2: Ig2, spn.m: m, 
-    spn.Rs: Rs, spn.Omega_g: Omega_g}
+  consts = {spn.Is: ball.Is, spn.Ig1: ball.Ig1, spn.Ig2: ball.Ig2, 
+    spn.m: ball.m, spn.Rs: ball.Rs, spn.Omega_g: ball.Omega_g}
   M = M.subs(consts)
   F = F.subs(consts)
 
@@ -201,12 +203,12 @@ def load_axay():
     ay = sp.sympify(file.read())
   return ax, ay
 
-def lambdify_axay(ax, ay, Rs=0.05):
+def lambdify_axay(ax, ay, ball=CMGBall()):
   printv(1, "Lambdifying accelerations")
   import sp_namespace as spn
 
   # Make the substitutions for everything that's not a state variable
-  consts = {spn.Rs: Rs}
+  consts = {spn.Rs: ball.Rs}
   ax = ax.subs(consts)
   ay = ay.subs(consts)
 

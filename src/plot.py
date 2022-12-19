@@ -68,7 +68,7 @@ def plot_sol(sol, t, alphaddf, show=True, animate=True, px=None, py=None):
   qnorm = np.linalg.norm(x[0:4,:], axis=0)
   axs[1,0].plot(t, qnorm, label="|q|")
   axs[1,0].legend()
-  axs[1,0].set_title("Orientation Q")
+  axs[1,0].set_title("Orientation $q$")
   # 1,1
   axs[1,1].plot(t, x[4,:], label="$\omega_x$")
   axs[1,1].plot(t, x[5,:], label="$\omega_y$")
@@ -115,7 +115,7 @@ def plot_sol(sol, t, alphaddf, show=True, animate=True, px=None, py=None):
   ax.set_aspect("equal")
   ax.grid()
   if (px is not None) and (py is not None):
-    print(px, py)
+    #print(px, py)
     ph, = ax.plot(px, py, linestyle="-", color="g", marker=".")
   rh = ax.scatter([], [], s=5, color="b", marker=".")
   circle, = ax.plot([0], [0], marker="o", markerfacecolor="b")
