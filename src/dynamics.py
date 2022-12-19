@@ -3,9 +3,14 @@ Derive the equations of motion for the robot. It's a sphere with a Control Momen
 
 The strategy behind the dynamics was mostly adapted from the following paper by Putkaradze & Rogers:
 https://link.springer.com/article/10.1007/s11012-018-0904-5#Sec11
+
+TODO: Change the folder where things are saved by default... maybe.
 """
 
 import sympy as sp
+from sympy.algebras.quaternion import Quaternion
+from sympy.functions.elementary.complexes import conjugate
+import numpy as np # Currently only really used in eom
 from util import sharp, flat, printv
 
 from CMGBall import CMGBall
@@ -172,8 +177,8 @@ def load_MF():
 
 def find_axay(M, F, save=True):
   """ Find cartesian acceleration in the world frame.
-  rx-dot = R_sphere*omega_s__0[1,0]
-  ry-dot = -R_sphere*omega_s__0[0,0]
+  rx-dot = Rs*omega_s__0[1,0]
+  ry-dot = -Rs*omega_s__0[0,0]
   """
   
   printv(1, "Solving for acceleration")
@@ -217,3 +222,56 @@ def lambdify_axay(ax, ay, ball=CMGBall()):
   ayf = sp.lambdify(spn.s_axay, ay, "numpy")
 
   return axf, ayf
+
+def eom(Mf, Ff, x, alphaddf, aldd_args=(), ball=CMGBall()):
+  """ State variable EOM
+  x is a (11,) numpy array of the state variables
+  x = (eta, ex, ey, ez, omega_x, omega_y, omega_z, rx, ry, alpha, alphad)
+  
+  alphaddf: function that returns alphadd or a float alphadd
+  aldd_args: tuple of arguments for alphaddf
+  """
+  
+  xd = np.zeros(11)
+  if isinstance(alphaddf, float):
+    alphadd = np.copy(alphaddf)
+  else:
+    # Assume alphaddf is a function
+    alphadd = alphaddf(*aldd_args)
+  
+  Rs = ball.Rs
+  
+  # Equations 1-4: Orientation quaternion:
+  # NOTE: Maybe this part should be switched to use numpy quaternions
+  q = Quaternion(x[0], x[1], x[2], x[3])
+  omega_s__s = [x[4], x[5], x[6]]
+  omega_s__0 = flat((q * sharp(omega_s__s) * conjugate(q)).expand())
+  qdot = sharp(omega_s__0) * q / 2
+  xd[0] = float(qdot.a)
+  xd[1] = float(qdot.b)
+  xd[2] = float(qdot.c)
+  xd[3] = float(qdot.d)
+  
+  # Equations 5-7: omega-dot from EOM.
+  M = Mf(*x, alphadd)
+  F = Ff(*x, alphadd)
+  # [M]{qddot} = {F}
+  sol = np.linalg.lstsq(M, F, rcond=None)
+  # d/dt([omega_x, omega_y, omega_z) = qddot = sol[0]
+  # (This is because the omegas are generalized velocities)
+  xd[4:7] = sol[0][:,0]
+  
+  # Equations 8-9: rx, ry
+  # These come from the constraint equation: (-Rk) x Omega
+  xd[7] = Rs*omega_s__0[1,0]
+  xd[8] = -Rs*omega_s__0[0,0]
+  
+  # Equations 10-11: alpha, alphad
+  #   Integrate the provided alphaddf input function
+  xd[9] = x[10]
+  xd[10] = alphadd
+  
+  # print("t:",t)
+  # print("x:",x)
+  # print("xd:",xd)
+  return xd

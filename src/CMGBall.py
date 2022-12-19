@@ -8,7 +8,8 @@ class CMGBall:
   NOTE: Could also organize this such that the equations of motion are stored
     in this object as well, but I think I'd rather keep them separate.
   """
-  def __init__(Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600):
+  def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
+      alphadd_max=10):
     """ All parameters are floats:
     Is: Moment of inertia for the sphere
       Translates to [Is]=diag([Is, Is, Is]) because of symmetry
@@ -19,11 +20,14 @@ class CMGBall:
     Rs: Radius of the sphere
     Omega_g: Constant angular velocity of the gyroscope
       Presumably this is maintained by a motor spinning at a constant speed
+    alphadd_max: Max alpha-double-dot (rad/s^2)
     """
+    
     self.Is = Is
     self.Ig1 = Ig1
     self.Ig2 = Ig2
     self.m = m
     self.Rs = Rs
     self.Omega_g = Omega_g
+    self.alphadd_max = alphadd_max
   

@@ -75,7 +75,7 @@ def alphadd_FF(Mf, Ff, axf, ayf, x, a_des):
   
   def err(alphadd):
     # See how close this alphadd is to giving a_des
-    xd = eom(Mf, Ff, x, alphadd, R_sphere=0.05) # TODO R_sphere
+    xd = dyn.eom(Mf, Ff, x, alphadd, R_sphere=0.05) # TODO R_sphere
     
     #s_axay = (eta, ex, ey, ez, omega_x, omega_y, omega_z, etad, exd, eyd, ezd, omega_xd, omega_yd, omega_zd)
     s_axay = (*x[0:7], *xd[0:7])
@@ -125,57 +125,6 @@ def a_desf(t, x):
   to_goal = p_desf(t) - np.array([x[7], x[8]])
   return kp*to_goal
 
-def eom(Mf, Ff, x, alphaddf, aldd_args=(), R_sphere=0.05):
-  """ State variable EOM
-  x is a (11,) numpy array of the state variables
-  x = (eta, ex, ey, ez, omega_x, omega_y, omega_z, rx, ry, alpha, alphad)
-  
-  alphaddf: function that returns alphadd or a float alphadd
-  aldd_args: tuple of arguments for alphaddf
-  """
-  
-  xd = np.zeros(11)
-  if isinstance(alphaddf, float):
-    alphadd = np.copy(alphaddf)
-  else:
-    # Assume alphaddf is a function
-    alphadd = alphaddf(*aldd_args)
-  
-  # Equations 1-4: Orientation quaternion:
-  # NOTE: Maybe this part should be switched to use numpy quaternions
-  q = Quaternion(x[0], x[1], x[2], x[3])
-  omega_s__s = [x[4], x[5], x[6]]
-  omega_s__0 = flat((q * sharp(omega_s__s) * conjugate(q)).expand())
-  qdot = sharp(omega_s__0) * q / 2
-  xd[0] = float(qdot.a)
-  xd[1] = float(qdot.b)
-  xd[2] = float(qdot.c)
-  xd[3] = float(qdot.d)
-  
-  # Equations 5-7: omega-dot from EOM.
-  M = Mf(*x, alphadd)
-  F = Ff(*x, alphadd)
-  # [M]{qddot} = {F}
-  sol = np.linalg.lstsq(M, F, rcond=None)
-  # d/dt([omega_x, omega_y, omega_z) = qddot = sol[0]
-  # (This is because the omegas are generalized velocities)
-  xd[4:7] = sol[0][:,0]
-  
-  # Equations 8-9: rx, ry
-  # These come from the constraint equation: (-Rk) x Omega
-  xd[7] = R_sphere*omega_s__0[1,0]
-  xd[8] = -R_sphere*omega_s__0[0,0]
-  
-  # Equations 10-11: alpha, alphad
-  #   Integrate the provided alphaddf input function
-  xd[9] = x[10]
-  xd[10] = alphadd
-  
-  # print("t:",t)
-  # print("x:",x)
-  # print("xd:",xd)
-  return xd
-
 def simulate(Mf, Ff, alphaddf, axf=None, ayf=None, a_desf=None, t_max=2, 
     x0=None, R_sphere=0.05, fname="sol.dill"):
   """ Simulate the CMG ball
@@ -191,7 +140,7 @@ def simulate(Mf, Ff, alphaddf, axf=None, ayf=None, a_desf=None, t_max=2,
     x0 = np.zeros(11)
     x0[0] = 1 # Real part of quaternion starts at 1
   
-  xdot = lambda t,x: eom(Mf, Ff, x, alphaddf, aldd_args=(Mf, Ff, axf, ayf, x, 
+  xdot = lambda t,x: dyn.eom(Mf, Ff, x, alphaddf, aldd_args=(Mf, Ff, axf, ayf, x, 
     a_desf(t, x)), R_sphere=0.05)
 
   sol = spi.solve_ivp(xdot, [0,t_max], x0, dense_output=True, rtol=1e-4, 

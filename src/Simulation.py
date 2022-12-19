@@ -3,21 +3,26 @@ Simulation class to hold the parameters of a simulation
 """
 
 import numpy as np
-# import scipy.integrate as spi
+import scipy.integrate as spi
 # from scipy.misc import derivative as spd
+import scipy.optimize as spo
 from matplotlib import pyplot as plt
 from matplotlib import animation
 import dill
 
+import dynamics as dyn
 from CMGBall import CMGBall
 
 class Simulation:
   status = "unsolved"
   alphaddf = None
   control_mode = None
+  p_des = None
+  a_des = None
+  sol = None
   
   def __init__(self, alphadd, p_des=None, a_des=None, ball=CMGBall(), t_max=1, 
-      Mf=None, Ff=None):
+      x0=None, Mf=None, Ff=None, axf=None, ayf=None):
     """
     alphadd: Gyro acceleration alpha-double-dot
       Either pass a scalar, a function of time, or one of the following:
@@ -27,52 +32,134 @@ class Simulation:
       p_des: Desired position. Either a function of time or a 2x0 point.
       a_des: Desired acceleration. Either a function of time or a 2x0 vector.
       ball: A CMGBall object
+      t_max: Simulation end time
+      x0: Initial conditions (see dyn.eom for state vector description)
+      Mf, Ff, axf, ayf: Lambdified dynamics functions. If not provided, they
+        will be loaded from file.
     """
     
     ## Input handling
-    if isinstance(alphadd, float):
-      self.alphaddf = lambda t: alphadd
-    elif callable(alphadd):
+    if callable(alphadd):
       self.alphaddf = alphadd
+    elif isinstance(alphadd, float):
+      self.alphaddf = lambda t: alphadd
     elif alphadd == "FF":
       self.control_mode = "FF"
+    else:
+      assert False, "Unknown alphadd"
     
     if self.control_mode is not None:
-      assert (p_des is not None) or (a_des is not None), ("Must provide a "
-        "desired path or acceleration when using a control mode")
+      if p_des is not None:
+        if callable(p_des):
+          self.p_des = p_des
+        else:
+          self.p_des = lambda t: p_des
+      elif a_des is not None:
+        if callable(a_des):
+          self.a_des = a_des
+        else:
+          self.a_des = lambda t: a_des
+      else:
+        assert False, ("Must provide a desired path or acceleration when "
+          "using a control mode")
     
     self.ball = ball
-    
     self.t_max = t_max
+    
+    if x0 is None:
+      x0 = np.zeros(11)
+      x0[0] = 1 # Real part of quaternion starts at 1
+      self.x0 = x0
     
     if Mf is None or Ff is None:
       self.Mf, self.Ff = self.load_MfFf()
+    if axf is None or ayf is None:
+      self.axf, self.ayf = self.load_axfayf()
   
   def load_MfFf(self):
     M, F = dyn.load_MF()
     return dyn.lambdify_MF(M, F, ball=self.ball)
   
+  def load_axfayf(self):
+    ax, ay = dyn.load_axay()
+    return dyn.lambdify_axay(ax, ay, ball=self.ball)
+  
+  def alphadd_FF(self, t, x):
+    """ Return the acceleration calculated by feedforward control
+    """
+    
+    # Get a_des
+    if self.p_des is not None:
+      kp = 10 # TODO: Make this a parameter
+      to_goal = self.p_des(t) - np.array([x[7], x[8]])
+      a_des = kp*to_goal
+    elif self.a_des is not None:
+      a_des = self.a_des(t)
+    else:
+      assert False, "Must supply desired path to use FF control"
+    
+    def err(alphadd):
+      # See how close this alphadd is to giving a_des
+      xd = dyn.eom(self.Mf, self.Ff, x, alphadd, ball=self.ball)
+      #s_axay = (eta, ex, ey, ez, omega_x, omega_y, omega_z, etad, exd, eyd, ezd, omega_xd, omega_yd, omega_zd)
+      s_axay = (*x[0:7], *xd[0:7])
+      a_vec = np.array([self.axf(*s_axay), self.ayf(*s_axay)])
+      # L2 error
+      return np.sum(np.square(a_des - a_vec))
+    
+    alphadd_bounds = (-self.ball.alphadd_max, self.ball.alphadd_max)
+    res = spo.minimize_scalar(err, method="bounded", bounds=alphadd_bounds, 
+      options={"maxiter":10}) # TODO: maxiter parameter
+    #print(f"Error: {res.fun}, nit: {res.nit}, res.x: {res.x}")
+    print(f"t: {t}, error: {res.fun}, nfev: {res.nfev}, res.x: {res.x}")
+    # TODO: Decide adaptively to do MPC instead if error is too large
+    return res.x
+  
+  def run(self, fname="sim.dill"):
+    """ Run the simulation and store the result
+    fname (str or None): If str, then save the Simulation object to the given
+      filename upon completion.
+    """
+    
+    if self.control_mode == "FF":
+      xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphadd_FF, 
+        aldd_args=(t, x), ball=self.ball)
+    else:
+      xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphaddf, 
+        aldd_args=(t,), ball=self.ball)
+
+    # Solving the IVP
+    self.status = "running"
+    print("Solving IVP")
+    sol = spi.solve_ivp(xdot, [0,self.t_max], self.x0, dense_output=True, 
+      rtol=1e-4, atol=1e-7) # TODO: tol parameters
+    self.status = "solved"
+    
+    # Save result
+    self.sol = sol
+    if fname is not None:
+      self.save(fname)
+
+    return sol
+  
   def save(self, fname="sim.dill"):
     # Save to file
+    ssim = SerializableSim(self)
     with open(fname,"wb") as file:
-      dill.dump(self, file)
+      dill.dump(ssim, file)
     print(f"Simulation saved to {fname}")
   
-  def load(fname="sim.dill")
+  @staticmethod
+  def load(fname="sim.dill"):
     with open(fname, "rb") as file:
-      sim = dill.load(file)
+      ssim = dill.load(file)
+    sim = ssim.to_sim()
     print(f"Simulation loaded from {fname}. Status={sim.status}")
     return sim
   
-  def plot(self, animate=True):
+  def plot(self, show=True):
     """ Plots the solution results
-    
-    Parameters
-    ----------
-    alphaddf: input (alpha-double-dot) function used to create simulation
-    show (bool): Whether to show the plots now or just return the fig objects
-    animate (bool): Whether to plot animation
-    px, py: target path (px,py), plotted for reference behind animation
+    show (bool): Whether to show the plots now or simply return the figs
     """
     
     # Error checking
@@ -115,7 +202,7 @@ class Simulation:
     axs[1,0].plot(t, x[2,:], label=r"$\varepsilon_y$")
     axs[1,0].plot(t, x[3,:], label=r"$\varepsilon_z$")
     qnorm = np.linalg.norm(x[0:4,:], axis=0)
-    axs[1,0].plot(t, qnorm, label="|q|")
+    axs[1,0].plot(t, qnorm, label="|$q$|")
     axs[1,0].legend()
     axs[1,0].set_title("Orientation $q$")
     # 1,1
@@ -134,7 +221,6 @@ class Simulation:
     axs[2,1].plot(t, x[8,:])
     axs[2,1].set_xlabel("Time t")
     axs[2,1].set_title("Y-Position $ry$")
-    fig1.show()
     
     # Infer x-bounds for animation
     xmin = np.min(x[7,:])
@@ -143,18 +229,31 @@ class Simulation:
     ymin = np.min(x[8,:])
     ymax = np.max(x[8,:])
     yspan = ymax-ymin
-    xmin -= .1*xspan # Add 10% margins
-    xmax += .1*xspan
-    ymin -= .1*yspan
-    ymax += .1*yspan
+    margin = .1*max(xspan, yspan) # Add 10% margins
+    xmin -= margin
+    xmax += margin
+    ymin -= margin
+    ymax += margin
     
-    # if a_desf is not None:
-      # # Convert a_desf to px, py
-      # v_xy = lambda ti: spi.quad_vec(a_desf, min(t), ti)[0]
-      # p_xy = lambda ti: spi.quad_vec(v_xy, min(t), ti)[0]
-      # pxy = np.vstack([p_xy(ti) for ti in t])
-      # px = pxy[:,0]
-      # py = pxy[:,1]
+    # Build px, py vectors
+    px = None
+    py = None
+    if self.p_des is not None:
+      px = np.zeros(t.shape)
+      py = np.zeros(t.shape)
+      for i, ti in enumerate(t):
+        pxi, pyi = self.p_des(ti)
+        px[i] = pxi
+        py[i] = pyi
+    elif self.a_des is not None:
+      px = np.zeros(t.shape)
+      py = np.zeros(t.shape)
+      v_xy = lambda ti: spi.quad_vec(a_desf, min(t), ti)[0]
+      p_xy = lambda ti: spi.quad_vec(v_xy, min(t), ti)[0]
+      for i, ti in enumerate(t):
+        pxi, pyi = p_xy(ti)
+        px[i] = pxi
+        py[i] = pyi
     
     # Animate
     # https://jakevdp.github.io/blog/2012/08/18/matplotlib-animation-tutorial/
@@ -170,7 +269,7 @@ class Simulation:
     circle, = ax.plot([0], [0], marker="o", markerfacecolor="b")
 
     # initialization function: plot the background of each frame
-    def init():
+    def init_back():
         circle.set_data([], [])
         rh.set_offsets(np.array((0,2)))
         return circle, rh
@@ -184,12 +283,44 @@ class Simulation:
         return circle, rh
 
     # call the animator.  blit=True means only re-draw the parts that have changed.
-    anim = animation.FuncAnimation(fig2, animate, init_func=init,
+    anim = animation.FuncAnimation(fig2, animate, init_func=init_back,
       frames=t.size, interval=20, repeat_delay=2000, blit=True)
 
     if show:
+      fig1.show()
       fig2.show()
       input("PRESS ANY KEY TO QUIT")
     
     return fig1, fig2
 
+class SerializableSim:
+  def __init__(self, sim):
+    """
+    Convert a Simulation object (sim) to a serializable form.
+    This allows it to be saved to file.
+    The lambdified functions have a hard time being serialized, so leave them
+      out.
+    """
+    
+    self.alphaddf = sim.alphaddf
+    self.p_des = sim.p_des
+    self.a_des = sim.a_des
+    self.ball = sim.ball
+    self.t_max = sim.t_max
+    self.x0 = sim.x0
+    self.status = sim.status
+    self.control_mode = sim.control_mode
+    self.sol = sim.sol
+  
+  def to_sim(self, Mf=None, Ff=None, axf=None, ayf=None):
+    """
+    Convert this to a normal Simulation object
+    """
+    sim = Simulation(self.alphaddf, self.p_des, self.a_des, self.ball, 
+      self.t_max, self.x0, Mf, Ff, axf, ayf)
+    sim.control_mode = self.control_mode
+    sim.sol = self.sol
+    sim.status = self.status
+    
+    return sim
+  
