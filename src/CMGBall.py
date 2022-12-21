@@ -9,7 +9,7 @@ class CMGBall:
     in this object as well, but I think I'd rather keep them separate.
   """
   def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
-      alphadd_max=10):
+      alphadd_max=100):
     """ All parameters are floats:
     Is: Moment of inertia for the sphere
       Translates to [Is]=diag([Is, Is, Is]) because of symmetry

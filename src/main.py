@@ -16,9 +16,10 @@ def setup():
   return M, F, ax, ay
 
 def simple_test():
-  #alphaddf = lambda t: 0.01*np.ones_like(t)
-  alphaddf = lambda t: 20*np.cos(2*np.pi*t)
-  sim = Simulation(alphaddf, t_max=2)
+  #alphaddf = lambda t: 10*np.exp(t)
+  alphaddf = lambda t: 10*np.ones_like(t)
+  #alphaddf = lambda t: 24*np.cos(2*np.pi*t)
+  sim = Simulation(alphaddf, t_max=1.5)
   sim.run("tmp.dill")
   return sim
 
@@ -30,6 +31,12 @@ def FF_test():
   p_desf = np.array([1,1])
   sim = Simulation("FF", p_des=p_desf, t_max=1)
   sim.run("FF_test.dill")
+  return sim
+
+def MPC_test(n):
+  p_desf = np.array([1,1])
+  sim = Simulation("MPC", p_des=p_desf, t_max=1)
+  sim.run(f"MPC_test{n}.dill")
   return sim
 
 if __name__ == "__main__":
@@ -48,7 +55,9 @@ if __name__ == "__main__":
   
   #sim = simple_test()
   #sim = load_test()
-  sim = FF_test()
+  #sim = FF_test()
+  sim = MPC_test(5)
+  #sim = Simulation.load("MPC_test.dill")
   toc(times, "Simulation")
   
   sim.plot()

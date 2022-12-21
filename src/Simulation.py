@@ -1,5 +1,7 @@
 """
 Simulation class to hold the parameters of a simulation
+
+TODO: MPC control
 """
 
 import numpy as np
@@ -20,9 +22,19 @@ class Simulation:
   p_des = None
   a_des = None
   sol = None
+  # Parameters for MPC
+  MPCprms = {
+    "t_window": .25,
+    "N_vpoly": 3,
+    "N_sobol": 32, # Should be a power of 2
+    "N_eval": 5,
+    "ratemax": 100 #Hz
+  }
+  t_MPChist = [] # List of each time MPC optimization is run
+  v_MPChist = [] # List of v vectors from each time MPC is run
   
   def __init__(self, alphadd, p_des=None, a_des=None, ball=CMGBall(), t_max=1, 
-      x0=None, Mf=None, Ff=None, axf=None, ayf=None):
+      x0=None, Mf=None, Ff=None, axf=None, ayf=None, MPCprms={}):
     """
     alphadd: Gyro acceleration alpha-double-dot
       Either pass a scalar, a function of time, or one of the following:
@@ -45,6 +57,8 @@ class Simulation:
       self.alphaddf = lambda t: alphadd
     elif alphadd == "FF":
       self.control_mode = "FF"
+    elif alphadd == "MPC":
+      self.control_mode = "MPC"
     else:
       assert False, "Unknown alphadd"
     
@@ -75,6 +89,9 @@ class Simulation:
       self.Mf, self.Ff = self.load_MfFf()
     if axf is None or ayf is None:
       self.axf, self.ayf = self.load_axfayf()
+    
+    for key, val in MPCprms.items():
+      self.MPCprms[key] = val
   
   def load_MfFf(self):
     M, F = dyn.load_MF()
@@ -115,6 +132,89 @@ class Simulation:
     # TODO: Decide adaptively to do MPC instead if error is too large
     return res.x
   
+  def alphadd_v(self, t, v):
+    """ Parameterized acceleration function to be optimized in MPC
+    v is formatted as a polynomial
+    f = v[0] + v[1]*t + v[2]*t**2 + ... + v[n]*t**n
+    """
+    
+    # Equivalent, but possibly slower method:
+    # for n,vi in enumerate(v):
+      # a += vi*t**n
+    # return a
+    
+    t__n = np.power(t*np.ones_like(v), np.arange(len(v)))
+    
+    return np.sum(np.multiply(v,t__n))
+  
+  def alphadd_MPC(self, t, x):
+    """ Return the acceleration calculated by MPC
+    Procedure:
+    1. Check if we've already optimized the input for a time point very close 
+      to this one.
+    2. If not, simulate ahead for some amount of time
+    3. Score the resultant path
+    4. Optimize 2 & 3
+    """
+    
+    # Unpack MPCprms
+    t_window = self.MPCprms["t_window"]
+    N_vpoly = self.MPCprms["N_vpoly"]
+    N_sobol = self.MPCprms["N_sobol"]
+    N_eval = self.MPCprms["N_eval"]
+    ratemax = self.MPCprms["ratemax"]
+    
+    if len(self.t_MPChist) > 0:
+      t_diff = np.abs(np.array(self.t_MPChist) - t)
+      diff_min = np.min(t_diff)
+      # Are we close enough to one that's already been optimized?
+      if diff_min < 1.0/ratemax:
+        # Then use solution from that MPC run
+        # Index of closest solution to current time
+        i_closest = np.where(t_diff == diff_min)[0][0]
+        t_closest = self.t_MPChist[i_closest]
+        v_closest = self.v_MPChist[i_closest]
+        alphadd = self.alphadd_v(t-t_closest, v_closest)
+        return alphadd
+      # Otherwise, re-optimize v for alphadd_v(t,v) with MPC
+    
+    if self.p_des is None:
+      assert False, "Must supply desired path to use MPC control"
+    
+    def cost(v):
+      # Simulate using the given input vector v and score the path
+      xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphadd_v, 
+        aldd_args=(t,v), ball=self.ball)
+      # NOTE: this time is relative to the current time, t
+      t_eval = np.linspace(0, t_window, N_eval)
+      sol = spi.solve_ivp(xdot, [0,t_window], y0=x, method="RK23",
+        t_eval=t_eval, dense_output=False, rtol=1e-4, atol=1e-7) # TODO: tol
+      
+      # Compare to desired path
+      p_xy = [self.p_des(ti) for ti in t_eval]
+      p_x = np.array([p[0] for p in p_xy])
+      p_y = np.array([p[1] for p in p_xy])
+      err = np.array([p_x-sol.y[7], p_y-sol.y[8]]) #(2xN_MPCeval)
+      weighted_err = err*np.linspace(.1,1,N_eval)
+      return np.sum(np.square(weighted_err))
+    
+    # NOTE: Does it make sense to bound higher order terms the same way?
+    v_bounds = (-self.ball.alphadd_max, self.ball.alphadd_max)
+    bounds = [v_bounds]*N_vpoly
+    # Optimize. See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.shgo.html#scipy.optimize.shgo
+    # NOTE: Could switch from Sobol to LHC. Probably wouldn't change much
+    res = spo.shgo(cost, bounds, n=N_sobol, sampling_method='sobol',
+      minimizer_kwargs={"options":{"tol":.1}})
+    
+    v = res.x
+    print(f"t: {t}, cost: {res.fun}, nfev: {res.nfev}, v_opt: {v}")
+    
+    # Store this result to be reused
+    self.t_MPChist.append(t)
+    self.v_MPChist.append(v)
+    
+    return self.alphadd_v(0, v)
+  
   def run(self, fname="sim.dill"):
     """ Run the simulation and store the result
     fname (str or None): If str, then save the Simulation object to the given
@@ -124,6 +224,9 @@ class Simulation:
     if self.control_mode == "FF":
       xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphadd_FF, 
         aldd_args=(t, x), ball=self.ball)
+    elif self.control_mode == "MPC":
+      xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphadd_MPC, 
+        aldd_args=(t, x), ball=self.ball)
     else:
       xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphaddf, 
         aldd_args=(t,), ball=self.ball)
@@ -131,8 +234,13 @@ class Simulation:
     # Solving the IVP
     self.status = "running"
     print("Solving IVP")
+    """ Notes about the tolerance. For a test with a=10, t_max=1.5:
+    rtol=1e-7, atol=1e-10 was indistinguishable from rtol=1e-5, atol=1e-8. 
+    rtol=1e-4, atol=1e-7 gave a similar first loop, but a different second loop.
+    rtol=1e-5, atol=1e-7 seemed good.
+    """
     sol = spi.solve_ivp(xdot, [0,self.t_max], self.x0, dense_output=True, 
-      rtol=1e-4, atol=1e-7) # TODO: tol parameters
+      rtol=1e-5, atol=1e-7) # TODO: tol parameters
     self.status = "solved"
     
     # Save result
@@ -169,7 +277,7 @@ class Simulation:
     assert self.sol is not None, "Error, self.sol undefined"
     
     # Make time vector
-    t = np.linspace(0, self.t_max, 100)
+    t = np.linspace(0, self.t_max, 200)
     # Check bounds on solution
     tmin = min(self.sol.t)
     tmax = max(self.sol.t)
@@ -284,7 +392,7 @@ class Simulation:
 
     # call the animator.  blit=True means only re-draw the parts that have changed.
     anim = animation.FuncAnimation(fig2, animate, init_func=init_back,
-      frames=t.size, interval=20, repeat_delay=2000, blit=True)
+      frames=t.size, interval=20, repeat_delay=5000, blit=True)
 
     if show:
       fig1.show()
@@ -308,19 +416,26 @@ class SerializableSim:
     self.ball = sim.ball
     self.t_max = sim.t_max
     self.x0 = sim.x0
+    self.MPCprms = sim.MPCprms
+    # The following are not in the Simulation constructor
     self.status = sim.status
     self.control_mode = sim.control_mode
     self.sol = sim.sol
+    self.t_MPChist = sim.t_MPChist
+    self.v_MPChist = sim.v_MPChist
   
   def to_sim(self, Mf=None, Ff=None, axf=None, ayf=None):
     """
     Convert this to a normal Simulation object
     """
-    sim = Simulation(self.alphaddf, self.p_des, self.a_des, self.ball, 
-      self.t_max, self.x0, Mf, Ff, axf, ayf)
+    sim = Simulation(self.alphaddf, p_des=self.p_des, a_des=self.a_des, 
+      ball=self.ball, t_max=self.t_max, x0=self.x0, Mf=Mf, Ff=Ff, axf=axf, 
+      ayf=ayf, MPCprms=self.MPCprms)
+    sim.status = self.status
     sim.control_mode = self.control_mode
     sim.sol = self.sol
-    sim.status = self.status
+    sim.t_MPChist = self.t_MPChist
+    sim.v_MPChist = self.v_MPChist
     
     return sim
   

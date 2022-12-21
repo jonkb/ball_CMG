@@ -1,6 +1,8 @@
 # Dynamic simulation of a ball with a CMG mounted inside
 This program simulates the dynamics of a theoretical robot composed of a ball with a Control Moment Gyroscope (CMG) mounted inside.
 
+I'm in the process of documenting the methods here: https://www.overleaf.com/read/pcmrhbxdtwrf
+
 The strategy behind the dynamics was mostly adapted from the following paper by Putkaradze & Rogers:
 https://link.springer.com/article/10.1007/s11012-018-0904-5#Sec11
 
