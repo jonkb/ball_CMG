@@ -1,6 +1,7 @@
 """
 Launching point
 """
+
 import numpy as np
 from Simulation import Simulation
 from util import tic, toc
@@ -27,22 +28,21 @@ def load_test():
   sim = Simulation.load("tmp.dill")
   return sim
 
-def FF_test():
+def FF_test(tag):
   p_desf = np.array([1,1])
   sim = Simulation("FF", p_des=p_desf, t_max=1)
-  sim.run("FF_test.dill")
+  sim.run(f"FF_test{tag}.dill")
   return sim
 
-def MPC_test(n):
-  p_desf = np.array([1,1])
-  sim = Simulation("MPC", p_des=p_desf, t_max=1)
-  sim.run(f"MPC_test{n}.dill")
+def MPC_test(tag):
+  p_desf = np.array([1,3])
+  sim = Simulation("MPC", p_des=p_desf, t_max=4)
+  sim.run(f"MPC_{tag}.dill")
   return sim
 
 if __name__ == "__main__":
   # Derive the equations of motion and save them to file
   derive = False
-  sol_fname = "sol.dill"
   
   # Start timing the execution
   times = tic()
@@ -56,11 +56,13 @@ if __name__ == "__main__":
   #sim = simple_test()
   #sim = load_test()
   #sim = FF_test()
-  sim = MPC_test(5)
+  #sim = MPC_test("CAEDM1")
+  sim = MPC_test("CAEDM4")
+  #sim = FF_test("CAEDMFF1")
   #sim = Simulation.load("MPC_test.dill")
   toc(times, "Simulation")
   
-  sim.plot()
+  #sim.plot()
   
   print(" -- DONE -- ")
   toc(times, "Total execution", total=True)

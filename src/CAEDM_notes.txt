@@ -1,0 +1,16 @@
+"""
+RUN: nohup python -u main.py &> log_CAEDMX.txt &
+
+The following lines of code make it VERY sure that I won't use too much of 
+CAEDM's computing resources
+"""
+
+import os
+# Set environment variables to limit multithreading
+# This must be done before importing np
+threads = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = threads
+os.environ["OMP_NUM_THREADS"] = threads
+os.environ["MKL_NUM_THREADS"] = threads
+os.environ["VECLIB_MAXIMUM_THREADS"] = threads
+os.environ["NUMEXPR_NUM_THREADS"] = threads

@@ -28,7 +28,7 @@ class Simulation:
     "N_vpoly": 3,
     "N_sobol": 32, # Should be a power of 2
     "N_eval": 5,
-    "ratemax": 100 #Hz
+    "ratemax": 200 #Hz
   }
   t_MPChist = [] # List of each time MPC optimization is run
   v_MPChist = [] # List of v vectors from each time MPC is run
