@@ -428,14 +428,24 @@ class SerializableSim:
     """
     Convert this to a normal Simulation object
     """
+    if "MPCprms" not in dir(self):
+      # Older versions may not have this
+      self.MPCprms = {}
+    
+    if self.alphaddf is None:
+      self.alphaddf = self.control_mode
+    
     sim = Simulation(self.alphaddf, p_des=self.p_des, a_des=self.a_des, 
       ball=self.ball, t_max=self.t_max, x0=self.x0, Mf=Mf, Ff=Ff, axf=axf, 
       ayf=ayf, MPCprms=self.MPCprms)
     sim.status = self.status
     sim.control_mode = self.control_mode
     sim.sol = self.sol
-    sim.t_MPChist = self.t_MPChist
-    sim.v_MPChist = self.v_MPChist
+    
+    if "t_MPChist" in dir(self):
+      # Older versions may not have these
+      sim.t_MPChist = self.t_MPChist
+      sim.v_MPChist = self.v_MPChist
     
     return sim
   
