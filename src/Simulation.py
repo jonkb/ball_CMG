@@ -194,7 +194,12 @@ class Simulation:
       p_xy = [self.p_des(ti) for ti in t_eval]
       p_x = np.array([p[0] for p in p_xy])
       p_y = np.array([p[1] for p in p_xy])
-      err = np.array([p_x-sol.y[7], p_y-sol.y[8]]) #(2xN_MPCeval)
+      v_x = np.gradient(p_x, t_eval)
+      v_y = np.gradient(p_y, t_eval)
+      vsol_x = np.gradient(sol.y[7], t_eval)
+      vsol_y = np.gradient(sol.y[8], t_eval)
+      # (4xN_MPCeval)
+      err = np.array([p_x-sol.y[7], p_y-sol.y[8], v_x-vsol_x, v_y-vsol_y])
       weighted_err = err*np.linspace(.1,1,N_eval)
       return np.sum(np.square(weighted_err))
     
