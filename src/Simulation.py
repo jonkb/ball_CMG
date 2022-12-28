@@ -83,7 +83,7 @@ class Simulation:
     if x0 is None:
       x0 = np.zeros(11)
       x0[0] = 1 # Real part of quaternion starts at 1
-      self.x0 = x0
+    self.x0 = x0
     
     if Mf is None or Ff is None:
       self.Mf, self.Ff = self.load_MfFf()
@@ -92,6 +92,18 @@ class Simulation:
     
     for key, val in MPCprms.items():
       self.MPCprms[key] = val
+  
+  def __str__(self):
+    s = "Simulation Object\n"
+    s += f"\tstatus: {self.status}\n"
+    s += f"\tcontrol_mode: {self.control_mode}\n"
+    s += f"\tt_max: {self.t_max}\n"
+    s += f"\tx0: {self.x0}\n"
+    # Cut off final \n and indent the whole block
+    sball = str(self.ball)[0:-1].replace("\n", "\n\t")
+    s += f"\tball: {sball}\n"
+    s += f"\tMPCprms: {self.MPCprms}\n"
+    return s
   
   def load_MfFf(self):
     M, F = dyn.load_MF()

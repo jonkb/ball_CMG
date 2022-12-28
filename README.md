@@ -15,3 +15,7 @@ https://link.springer.com/article/10.1007/s11012-018-0904-5#Sec11
 # Dependencies
 See /requirements.txt
 
+# To Do
+* Display simulation parameters after loading from file (especially MPCparams)
+* Fix the relative weighting of position and velocity error in MPC cost
+

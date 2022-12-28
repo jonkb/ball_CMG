@@ -45,7 +45,7 @@ def MPC_test(tag):
   }
   #p_desf = np.array([1,3])
   p_desf = lambda t: (1-np.exp(-3*t))*np.array([1,2])
-  sim = Simulation("MPC", p_des=p_desf, t_max=3)
+  sim = Simulation("MPC", p_des=p_desf, t_max=3, MPCprms=MPCprms)
   fname = f"MPC_{tag}.dill"
   sim.save(fname)
   sim.run(fname)
@@ -68,12 +68,15 @@ if __name__ == "__main__":
   #sim = load_test()
   #sim = FF_test()
   #sim = MPC_test("CAEDM1")
-  sim = MPC_test("CAEDM10")
+  #sim = MPC_test("CAEDM10")
   #sim = FF_test("CAEDMFF1")
-  #sim = Simulation.load("MPC_test.dill")
-  toc(times, "Simulation")
+  #toc(times, "Simulation")
   
-  #sim.plot()
+  fname = "MPC_CAEDM9.dill"
+  sim = Simulation.load(fname)
+  print(f"Loaded simulation from file: {fname}")
+  print(sim)
+  sim.plot()
   
   print(" -- DONE -- ")
   toc(times, "Total execution", total=True)

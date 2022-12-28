@@ -31,3 +31,13 @@ class CMGBall:
     self.Omega_g = Omega_g
     self.alphadd_max = alphadd_max
   
+  def __str__(self):
+    s = "CMG Ball Object\n"
+    s += f"\tIs={self.Is}\n"
+    s += f"\tIg1={self.Ig1}\n"
+    s += f"\tIg2=Ig3={self.Ig2}\n"
+    s += f"\tm={self.m}\n"
+    s += f"\tRs={self.Rs}\n"
+    s += f"\tOmega_g={self.Omega_g}\n"
+    s += f"\talphadd_max={self.alphadd_max}\n"
+    return s
