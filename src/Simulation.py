@@ -163,6 +163,7 @@ class Simulation:
     N_sobol = self.MPCprms["N_sobol"]
     N_eval = self.MPCprms["N_eval"]
     ratemax = self.MPCprms["ratemax"]
+    vweight = self.MPCprms["vweight"] if "vweight" in self.MPCprms else 0.1
     
     if len(self.t_MPChist) > 0:
       t_diff = np.abs(np.array(self.t_MPChist) - t)
@@ -201,6 +202,7 @@ class Simulation:
       # (4xN_MPCeval)
       err = np.array([p_x-sol.y[7], p_y-sol.y[8], v_x-vsol_x, v_y-vsol_y])
       weighted_err = err*np.linspace(.1,1,N_eval)
+      weighted_err[2:4,:] *= vweight
       return np.sum(np.square(weighted_err))
     
     # NOTE: Does it make sense to bound higher order terms the same way?

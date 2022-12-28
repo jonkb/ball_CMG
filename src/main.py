@@ -40,7 +40,8 @@ def MPC_test(tag):
     "N_vpoly": 3,
     "N_sobol": 32, # Should be a power of 2
     "N_eval": 4,
-    "ratemax": 150 #Hz
+    "ratemax": 150, #Hz
+    "vweight": .5
   }
   #p_desf = np.array([1,3])
   p_desf = lambda t: (1-np.exp(-3*t))*np.array([1,2])
@@ -67,7 +68,7 @@ if __name__ == "__main__":
   #sim = load_test()
   #sim = FF_test()
   #sim = MPC_test("CAEDM1")
-  sim = MPC_test("CAEDM7")
+  sim = MPC_test("CAEDM10")
   #sim = FF_test("CAEDMFF1")
   #sim = Simulation.load("MPC_test.dill")
   toc(times, "Simulation")
