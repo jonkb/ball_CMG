@@ -1,7 +1,5 @@
 """
 Simulation class to hold the parameters of a simulation
-
-TODO: MPC control
 """
 
 import numpy as np
@@ -28,7 +26,8 @@ class Simulation:
     "N_vpoly": 3,
     "N_sobol": 32, # Should be a power of 2
     "N_eval": 5,
-    "ratemax": 200 #Hz
+    "ratemax": 200, #Hz
+    "vweight": 0.001 # Weight on v_err relative to x_err
   }
   t_MPChist = [] # List of each time MPC optimization is run
   v_MPChist = [] # List of v vectors from each time MPC is run
@@ -175,7 +174,7 @@ class Simulation:
     N_sobol = self.MPCprms["N_sobol"]
     N_eval = self.MPCprms["N_eval"]
     ratemax = self.MPCprms["ratemax"]
-    vweight = self.MPCprms["vweight"] if "vweight" in self.MPCprms else 0.1
+    vweight = self.MPCprms["vweight"]
     
     if len(self.t_MPChist) > 0:
       t_diff = np.abs(np.array(self.t_MPChist) - t)
