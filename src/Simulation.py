@@ -388,25 +388,32 @@ class Simulation:
     ax = plt.axes(xlim=(xmin, xmax), ylim=(ymin, ymax))
     ax.set_aspect("equal")
     ax.grid()
-    if (px is not None) and (py is not None):
+    ph = None
+    if (px is not None):
       #print(px, py)
-      ph, = ax.plot(px, py, linestyle="-", color="g", marker=".")
+      #ph, = ax.plot(px, py, linestyle="-", color="g", marker=".")
+      ph, = ax.plot([px[0]], [py[0]], linestyle="-", color="g", marker=".")
     rh = ax.scatter([], [], s=5, color="b", marker=".")
     circle, = ax.plot([0], [0], marker="o", markerfacecolor="b")
 
     # initialization function: plot the background of each frame
     def init_back():
-        circle.set_data([], [])
-        rh.set_offsets(np.array((0,2)))
-        return circle, rh
+      circle.set_data([], [])
+      rh.set_offsets(np.array((0,2)))
+      if (px is not None):
+        ph.set_data([], [])
+      return circle, rh, ph
 
-    # animation function.  This is called sequentially
+    # animation function. This is called sequentially
     def animate(i):
-        rx = x[7,i]
-        ry = x[8,i]
-        circle.set_data([rx], [ry])
-        rh.set_offsets(x[7:9,0:i].T)
-        return circle, rh
+      rx = x[7,i]
+      ry = x[8,i]
+      circle.set_data([rx], [ry])
+      if px is not None:
+        #print(px[0:i])
+        ph.set_data(px[0:i], py[0:i])
+      rh.set_offsets(x[7:9,0:i].T)
+      return circle, rh, ph
 
     # call the animator.  blit=True means only re-draw the parts that have changed.
     anim = animation.FuncAnimation(fig2, animate, init_func=init_back,

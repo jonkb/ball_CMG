@@ -36,7 +36,7 @@ def FF_test(tag):
 
 def MPC_test(tag):
   MPCprms = {
-    "t_window": .15,
+    "t_window": .25,
     "N_vpoly": 3,
     "N_sobol": 32, # Should be a power of 2
     "N_eval": 4,
@@ -67,13 +67,15 @@ if __name__ == "__main__":
   #sim = simple_test()
   #sim = load_test()
   #sim = FF_test()
-  sim = MPC_test("CAEDM14")
+  #sim = MPC_test("CAEDM14")
   #sim = FF_test("CAEDMFF1")
-  toc(times, "Simulation")
+  #toc(times, "Simulation")
   
-  #fname = "MPC_CAEDM9.dill"
-  #sim = Simulation.load(fname)
-  #print(f"Loaded simulation from file: {fname}")
+  #fname = "MPC_CAEDM14.dill"
+  #fname = "MPC_testCAEDM1.dill" # Hits it exactly
+  fname = "MPC_test4.dill"
+  sim = Simulation.load(fname)
+  print(f"Loaded simulation from file: {fname}")
   print(sim)
   sim.plot()
   
