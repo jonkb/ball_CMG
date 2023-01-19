@@ -122,10 +122,11 @@ if __name__ == "__main__":
   #sim = FF_test("CAEDMFF1")
   #toc(times, "Simulation")
   
-  #print(sim)
-  #sim.plot()
+  print(sim)
+  sim.plot()
   
-  prmvar(sim, "prmvartest")
+  # Test variants of sim
+  #prmvar(sim, "prmvartest")
   
   print(" -- DONE -- ")
   toc(times, "Total execution", total=True)
