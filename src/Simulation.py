@@ -233,7 +233,7 @@ class Simulation:
     
     return self.alphadd_v(0, v)
   
-  def run(self, fname="sim.dill"):
+  def run(self, t_eval=None, fname="sim.dill"):
     """ Run the simulation and store the result
     fname (str or None): If str, then save the Simulation object to the given
       filename upon completion.
@@ -257,8 +257,12 @@ class Simulation:
     rtol=1e-4, atol=1e-7 gave a similar first loop, but a different second loop.
     rtol=1e-5, atol=1e-7 seemed good.
     """
-    sol = spi.solve_ivp(xdot, [0,self.t_max], self.x0, dense_output=True, 
-      rtol=1e-5, atol=1e-7) # TODO: tol parameters
+    if t_eval is None:
+      sol = spi.solve_ivp(xdot, [0,self.t_max], self.x0, dense_output=True, 
+        rtol=1e-5, atol=1e-7) # TODO: tol parameters
+    else:
+      sol = spi.solve_ivp(xdot, [0,self.t_max], self.x0, t_eval=t_eval,
+        dense_output=False, rtol=1e-5, atol=1e-7)
     self.status = "solved"
     
     # Save result
@@ -275,6 +279,59 @@ class Simulation:
       dill.dump(ssim, file)
     print(f"Simulation saved to {fname}")
   
+  def xeval(self, t=None):
+    """ Evaluate the solved simulation at discrete time steps
+    """
+    # Error checking
+    if self.status != "solved":
+      print("This simulation still needs to be run")
+      return
+    assert self.sol is not None, "Error, self.sol undefined"
+
+    if t is None:
+      # Make time vector
+      t = np.linspace(0, self.t_max, 200)
+      # Evaluate solution at desired time values
+      x = self.sol.sol(t)
+    
+    # Check bounds on solution
+    tmin = np.min(self.sol.t)
+    tmax = np.max(self.sol.t)
+    if tmin > 0 or tmax < np.max(t):
+      print("Warning: solution object was not solved over whole t vector.")
+      print(f"\tsol.t = [{tmin}, {tmax}]")
+      print(f"\tt = [{min(t)}, {max(t)}]")
+    
+    # Evaluate solution at desired time values
+    if np.all(self.sol.t == t):
+      x = self.sol.y
+    else:
+      x = self.sol.sol(t)
+    
+    # Evaluate alphadd @ t
+    if self.alphaddf is None:
+      # Differentiate alphad
+      alphadd = np.gradient(x[10,:], t)
+    else:
+      alphadd = self.alphaddf(t)
+    
+    return t, x, alphadd
+  
+  def copy(self, unsolve=False):
+    """
+    Return a copy of this Simulation object
+    This only keeps the things which are serialized in SerializableSim
+    """
+    ssim1 = SerializableSim(self)
+    strsim = dill.dumps(ssim1)
+    ssim2 = dill.loads(strsim)
+    sim2 = ssim2.to_sim()
+    if unsolve:
+      # Remove the solution and reset the simulation
+      sim2.status = "unsolved"
+      sim2.sol = None
+    return sim2
+  
   @staticmethod
   def load(fname="sim.dill"):
     with open(fname, "rb") as file:
@@ -283,37 +340,14 @@ class Simulation:
     print(f"Simulation loaded from {fname}. Status={sim.status}")
     return sim
   
-  def plot(self, show=True):
-    """ Plots the solution results
-    show (bool): Whether to show the plots now or simply return the figs
+  @staticmethod
+  def plot_tx(t, x, alphadd, fig=None, axs=None):
+    """ Plot the solution results x(t) and alphadd(t)
+    Returns fig, axs (axs is a 3x2 grid)
     """
     
-    # Error checking
-    if self.status != "solved":
-      print("This simulation still needs to be run")
-      return
-    assert self.sol is not None, "Error, self.sol undefined"
-    
-    # Make time vector
-    t = np.linspace(0, self.t_max, 200)
-    # Check bounds on solution
-    tmin = min(self.sol.t)
-    tmax = max(self.sol.t)
-    if tmin > 0 or tmax < self.t_max:
-      print("Warning: solution object was not solved over whole t vector.")
-      print(f"\tsol.t = [{tmin}, {tmax}]")
-      print(f"\tt = [{min(t)}, {max(t)}]")
-    
-    # Evaluate solution & input at desired time values
-    x = self.sol.sol(t)
-    if self.alphaddf is None:
-      # Differentiate alphad
-      alphadd = np.gradient(x[10,:], t)
-    else:
-      alphadd = self.alphaddf(t)
-
-    ## Plot
-    fig1, axs = plt.subplots(3,2, sharex=True)
+    if fig is None and axs is None:
+      fig, axs = plt.subplots(3,2, sharex=True)
     # 0,0 - Input alpha acceleration
     axs[0,0].plot(t, alphadd)
     axs[0,0].set_title(r"Input gyro acceleration $\ddot{\alpha}$")
@@ -348,30 +382,44 @@ class Simulation:
     axs[2,1].set_xlabel("Time t")
     axs[2,1].set_title("Y-Position $ry$")
     
-    # Infer x-bounds for animation
-    xmin = np.min(x[7,:])
-    xmax = np.max(x[7,:])
-    xspan = xmax-xmin
-    ymin = np.min(x[8,:])
-    ymax = np.max(x[8,:])
-    yspan = ymax-ymin
-    margin = .1*max(xspan, yspan) # Add 10% margins
-    xmin -= margin
-    xmax += margin
-    ymin -= margin
-    ymax += margin
+    return fig, axs
+  
+  @staticmethod
+  def plot_anim(t, x, p_des, a_des, fig=None, ax=None):
+    """ Plot an animation of the ball rolling
+    """
     
-    # Build px, py vectors
+    if fig is None or axs is None:
+      # Infer x-bounds for animation
+      xmin = np.min(x[7,:])
+      xmax = np.max(x[7,:])
+      xspan = xmax-xmin
+      ymin = np.min(x[8,:])
+      ymax = np.max(x[8,:])
+      yspan = ymax-ymin
+      margin = .1*max(xspan, yspan) # Add 10% margins
+      xmin -= margin
+      xmax += margin
+      ymin -= margin
+      ymax += margin
+      # Make figure
+      fig = plt.figure()
+      #ax = plt.axes(xlim=(-2.5, 2.5), ylim=(-2.5, 2.5))
+      ax = plt.axes(xlim=(xmin, xmax), ylim=(ymin, ymax))
+      ax.set_aspect("equal")
+      ax.grid()
+    
+    # Build px, py vectors (desired path)
     px = None
     py = None
-    if self.p_des is not None:
+    if p_des is not None:
       px = np.zeros(t.shape)
       py = np.zeros(t.shape)
       for i, ti in enumerate(t):
-        pxi, pyi = self.p_des(ti)
+        pxi, pyi = p_des(ti)
         px[i] = pxi
         py[i] = pyi
-    elif self.a_des is not None:
+    elif a_des is not None:
       px = np.zeros(t.shape)
       py = np.zeros(t.shape)
       v_xy = lambda ti: spi.quad_vec(a_desf, min(t), ti)[0]
@@ -383,17 +431,17 @@ class Simulation:
     
     # Animate
     # https://jakevdp.github.io/blog/2012/08/18/matplotlib-animation-tutorial/
-    fig2 = plt.figure()
-    #ax = plt.axes(xlim=(-2.5, 2.5), ylim=(-2.5, 2.5))
-    ax = plt.axes(xlim=(xmin, xmax), ylim=(ymin, ymax))
-    ax.set_aspect("equal")
-    ax.grid()
+    
+    # Set up animation
     ph = None
+    # Desired path line
     if (px is not None):
       #print(px, py)
       #ph, = ax.plot(px, py, linestyle="-", color="g", marker=".")
       ph, = ax.plot([px[0]], [py[0]], linestyle="-", color="g", marker=".")
+    # Ball path dotted line
     rh = ax.scatter([], [], s=5, color="b", marker=".")
+    # Ball position marker
     circle, = ax.plot([0], [0], marker="o", markerfacecolor="b")
 
     # initialization function: plot the background of each frame
@@ -416,13 +464,130 @@ class Simulation:
       return circle, rh, ph
 
     # call the animator.  blit=True means only re-draw the parts that have changed.
-    anim = animation.FuncAnimation(fig2, animate, init_func=init_back,
+    anim = animation.FuncAnimation(fig, animate, init_func=init_back,
       frames=t.size, interval=20, repeat_delay=5000, blit=True)
+    
+    # This has to be here, or else something important gets garbage collected
+    #   at the end of the function.
+    fig.show()
+    input("PRESS ANY KEY TO QUIT")
+    
+    return fig, ax
+  
+  @staticmethod
+  def plot_anims(t, xs, p_des, a_des, fig=None, ax=None):
+    """ Plot several simultaneous animation of the ball rolling
+    """
+    
+    if fig is None or axs is None:
+      # Infer x-bounds for animation
+      xmin=0
+      xmax=0
+      ymin=0
+      ymax=0
+      for x in xs:
+        xmin = min(xmin, np.min(x[7,:]))
+        xmax = max(xmax, np.max(x[7,:]))
+        ymin = min(ymin, np.min(x[8,:]))
+        ymax = max(ymax, np.max(x[8,:]))
+      xspan = xmax-xmin
+      yspan = ymax-ymin
+      margin = .1*max(xspan, yspan) # Add 10% margins
+      # Make figure
+      fig = plt.figure()
+      ax = plt.axes(xlim=(xmin-margin, xmax+margin), 
+        ylim=(ymin-margin, ymax+margin))
+      ax.set_aspect("equal")
+      ax.grid()
+    
+    # Build px, py vectors (desired path)
+    px = None
+    py = None
+    if p_des is not None:
+      px = np.zeros(t.shape)
+      py = np.zeros(t.shape)
+      for i, ti in enumerate(t):
+        pxi, pyi = p_des(ti)
+        px[i] = pxi
+        py[i] = pyi
+    elif a_des is not None:
+      px = np.zeros(t.shape)
+      py = np.zeros(t.shape)
+      v_xy = lambda ti: spi.quad_vec(a_desf, min(t), ti)[0]
+      p_xy = lambda ti: spi.quad_vec(v_xy, min(t), ti)[0]
+      for i, ti in enumerate(t):
+        pxi, pyi = p_xy(ti)
+        px[i] = pxi
+        py[i] = pyi
+    
+    # Animate
+    # https://jakevdp.github.io/blog/2012/08/18/matplotlib-animation-tutorial/
+    
+    # Set up animation
+    ph = None
+    # Desired path line
+    if (px is not None):
+      #print(px, py)
+      #ph, = ax.plot(px, py, linestyle="-", color="g", marker=".")
+      ph, = ax.plot([px[0]], [py[0]], linestyle="-", color="g", marker=".")
+    # Ball path dotted lines
+    rhs = []
+    chs = []
+    for x in xs:
+      rhs.append(ax.scatter([], [], s=5, color="b", marker="."))
+      # Ball position marker
+      circle, = ax.plot([0], [0], marker="o", markerfacecolor="b")
+      chs.append(circle)
 
+    # initialization function: plot the background of each frame
+    def init_back():
+      for circle in chs:
+        circle.set_data([], [])
+      for rh in rhs:
+        rh.set_offsets(np.array((0,2)))
+      if (px is not None):
+        ph.set_data([], [])
+      return ph, *rhs, *chs
+
+    # animation function. This is called sequentially
+    def animate(i):
+      if px is not None:
+        #print(px[0:i])
+        ph.set_data(px[0:i], py[0:i])
+      for x, rh, ch in zip(xs, rhs, chs):
+        rx = x[7,i]
+        ry = x[8,i]
+        circle.set_data([rx], [ry])
+        rh.set_offsets(x[7:9,0:i].T)
+      return ph, *rhs, *chs
+
+    # call the animator.  blit=True means only re-draw the parts that have changed.
+    anim = animation.FuncAnimation(fig, animate, init_func=init_back,
+      frames=t.size, interval=20, repeat_delay=5000, blit=True)
+    
+    # This has to be here, or else something important gets garbage collected
+    #   at the end of the function.
+    fig.show()
+    input("PRESS ANY KEY TO QUIT")
+    
+    return fig, ax
+  
+  def plot(self, t_eval=None, show=True):
+    """ Plots the solution results
+    show (bool): Whether to show the plots now or simply return the figs
+    """
+    
+    # Evaluate the solution and the input function at discrete time steps
+    t, x, alphadd = self.xeval(t=t_eval)
+
+    # Plot state vector as a function of time
+    fig1, axs = self.plot_tx(t, x, alphadd)
+    
     if show:
       fig1.show()
-      fig2.show()
-      input("PRESS ANY KEY TO QUIT")
+    
+    # Animation
+    fig2, ax = self.plot_anim(t, x, self.p_des, self.a_des)
     
     return fig1, fig2
 
