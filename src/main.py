@@ -22,7 +22,7 @@ def simple_test():
   alphaddf = lambda t: 10*np.ones_like(t)
   #alphaddf = lambda t: 24*np.cos(2*np.pi*t)
   sim = Simulation(alphaddf, t_max=1.5)
-  sim.run("tmp.dill")
+  sim.run(fname="tmp.dill")
   return sim
 
 def load_test():
@@ -32,7 +32,7 @@ def load_test():
 def FF_test(tag):
   p_desf = np.array([1,1])
   sim = Simulation("FF", p_des=p_desf, t_max=1)
-  sim.run(f"FF_test{tag}.dill")
+  sim.run(fname=f"FF_test{tag}.dill")
   return sim
 
 def MPC_test(tag):
@@ -49,7 +49,7 @@ def MPC_test(tag):
   sim = Simulation("MPC", p_des=p_desf, t_max=3, MPCprms=MPCprms)
   fname = f"MPC_{tag}.dill"
   sim.save(fname)
-  sim.run(fname)
+  sim.run(fname=fname)
   return sim
 
 def prmvar(template_sim, tag):
@@ -109,13 +109,13 @@ if __name__ == "__main__":
     toc(times, "EOM derivation")
   
   # Load an existing sim from file
-  fname = "MPC_testCAEDM1.dill" # Hits it exactly
+  #fname = "MPC_testCAEDM1.dill" # Hits it exactly
   #fname = "MPC_test4.dill"
-  sim = Simulation.load(fname)
-  print(f"Loaded simulation from file: {fname}")
+  #sim = Simulation.load(fname)
+  #print(f"Loaded simulation from file: {fname}")
   
   # Run a new simulation
-  #sim = simple_test()
+  sim = simple_test()
   #sim = load_test()
   #sim = FF_test()
   #sim = MPC_test("CAEDM14")

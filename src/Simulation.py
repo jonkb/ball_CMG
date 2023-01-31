@@ -389,7 +389,7 @@ class Simulation:
     """ Plot an animation of the ball rolling
     """
     
-    if fig is None or axs is None:
+    if fig is None or ax is None:
       # Infer x-bounds for animation
       xmin = np.min(x[7,:])
       xmax = np.max(x[7,:])
@@ -450,18 +450,20 @@ class Simulation:
       rh.set_offsets(np.array((0,2)))
       if (px is not None):
         ph.set_data([], [])
-      return circle, rh, ph
+        return circle, rh, ph
+      return circle, rh
 
     # animation function. This is called sequentially
     def animate(i):
       rx = x[7,i]
       ry = x[8,i]
       circle.set_data([rx], [ry])
+      rh.set_offsets(x[7:9,0:i].T)
       if px is not None:
         #print(px[0:i])
         ph.set_data(px[0:i], py[0:i])
-      rh.set_offsets(x[7:9,0:i].T)
-      return circle, rh, ph
+        return circle, rh, ph
+      return circle, rh
 
     # call the animator.  blit=True means only re-draw the parts that have changed.
     anim = animation.FuncAnimation(fig, animate, init_func=init_back,
@@ -479,7 +481,7 @@ class Simulation:
     """ Plot several simultaneous animation of the ball rolling
     """
     
-    if fig is None or axs is None:
+    if fig is None or ax is None:
       # Infer x-bounds for animation
       xmin=0
       xmax=0
@@ -547,19 +549,21 @@ class Simulation:
         rh.set_offsets(np.array((0,2)))
       if (px is not None):
         ph.set_data([], [])
-      return ph, *rhs, *chs
+        return ph, *rhs, *chs
+      return *rhs, *chs
 
     # animation function. This is called sequentially
     def animate(i):
-      if px is not None:
-        #print(px[0:i])
-        ph.set_data(px[0:i], py[0:i])
       for x, rh, ch in zip(xs, rhs, chs):
         rx = x[7,i]
         ry = x[8,i]
         circle.set_data([rx], [ry])
         rh.set_offsets(x[7:9,0:i].T)
-      return ph, *rhs, *chs
+      if (px is not None):
+        #print(px[0:i])
+        ph.set_data(px[0:i], py[0:i])
+        return ph, *rhs, *chs
+      return *rhs, *chs
 
     # call the animator.  blit=True means only re-draw the parts that have changed.
     anim = animation.FuncAnimation(fig, animate, init_func=init_back,
