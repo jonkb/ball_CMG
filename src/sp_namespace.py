@@ -24,7 +24,7 @@ omega_z = sp.Function("omega_z")(t)
 omega_xd = sp.diff(omega_x, t)
 omega_yd = sp.diff(omega_y, t)
 omega_zd = sp.diff(omega_z, t)
-omega_xdd = sp.diff(omega_x, (t,2))
+omega_xdd = sp.diff(omega_x, (t,2)) # Irrelevant
 omega_ydd = sp.diff(omega_y, (t,2))
 omega_zdd = sp.diff(omega_z, (t,2))
 # Define orientation with a quaternion

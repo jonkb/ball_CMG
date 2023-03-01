@@ -16,7 +16,12 @@ from util import sharp, flat, printv
 from CMGBall import CMGBall
 
 def derive_EOM(save=True):
-  """ Derive the equations of motion and save them to file
+  """ Derive the equations of motion and save them to file.
+  
+  The equations of motion are in the format
+    M@qdd = F
+    where qdd = d/dt([omega_x, omega_y, omega_z])
+  
   Parameters
   ----------
   save (bool): Whether to save M & F to file (default True)
@@ -257,7 +262,7 @@ def eom(Mf, Ff, x, alphaddf, aldd_args=(), ball=CMGBall()):
   F = Ff(*x, alphadd)
   # [M]{qddot} = {F}
   sol = np.linalg.lstsq(M, F, rcond=None)
-  # d/dt([omega_x, omega_y, omega_z) = qddot = sol[0]
+  # d/dt([omega_x, omega_y, omega_z]) = qddot = sol[0]
   # (This is because the omegas are generalized velocities)
   xd[4:7] = sol[0][:,0]
   
@@ -275,3 +280,61 @@ def eom(Mf, Ff, x, alphaddf, aldd_args=(), ball=CMGBall()):
   # print("x:",x)
   # print("xd:",xd)
   return xd
+
+if __name__ == "__main__":
+  sp.init_printing(use_unicode=False, num_columns=180) 
+  import sp_namespace as spn
+  M, F = load_MF()
+  
+  # Investigate some things about them
+  # print(f"M:\n\tSymbols: {M.atoms(sp.Symbol)}")
+  # print(f"\tFree symbols: {M.free_symbols}")
+  # print(f"\tFunctions: {M.atoms(sp.Function)}")
+  # print(f"\tDerivatives: {M.has(sp.core.function.Derivative)}")
+  #print(f"\tVariables: {M.variables}")
+  # print(f"F:\n\tSymbols: {F.atoms(sp.Symbol)}")
+  # print(f"\tFree symbols: {F.free_symbols}")
+  # print(f"\tFunctions: {F.atoms(sp.Function)}")
+  # print(f"\tDerivatives: {M.has(sp.core.function.Derivative)}")
+  
+  # See which of spn.[] variables are in each
+  svars_in_M = []
+  svars_in_F = []
+  for svar in dir(spn):
+    var = getattr(spn, svar)
+    if M.has(var):
+      svars_in_M.append(svar)
+    if F.has(var):
+      svars_in_F.append(svar)
+  print(f"M has: {', '.join(svars_in_M)}")
+  print(f"F has: {', '.join(svars_in_F)}")
+  
+  # Investigate equilibrium
+  print("At equilibrium, xd=xdd=0 & M@qdd=0")
+  eqsubs = {
+    spn.omega_x : 0,
+    spn.omega_y : 0,
+    spn.omega_z : 0,
+    spn.omega_xd : 0,
+    spn.omega_yd : 0,
+    spn.omega_zd : 0
+  }
+  EOM3 = F[1,0].subs(eqsubs).simplify()
+  print("EOM3 at equilibrium:")
+  sp.pprint(EOM3)
+  sp.pprint(sp.solve(EOM3, spn.alphad)[0])
+  # Conclusion: alphad_e = 0
+  # EOM1=0 ALSO if alpha = 0, pi, -pi, ...
+  # EOM2=EOM3=0 ALSO if alpha = pi/2, -pi/2, ...
+  # THAT'S VALUABLE INFO. It says the ways that we can't accelerate, if we're starting from a stop.
+  #   E.g. if alpha=0 & qd=0, then omega_xd=0. Wait. Is that trivial?
+  #   Logic: qd=0 --> alphad=0 OR alpha=0,pi,-pi
+  #     !(alphad=0 OR alpha=0,pi,-pi) --> qd != 0
+  #     (alphad != 0 AND alpha != 0,pi,-pi) --> qd != 0
+  #     I don't think I can say that (alpha = 0,pi,-pi) --> Anything
+  #     But in some cases, at least... I've observed that alpha=0 --> no acceleration of omega_x (if we're starting at rest). To show that, I need the mapping omegad = f(alpha,alphad)
+  
+  # For control: state the reference position in the sphere-fixed frame.
+  # There's a clear transform from omega to position (in sphere-fixed frame). Er... that's actually tricky bc the sphere rolls. Well, there's an easy transform from omega to velocity in sphere-fixed frame, so at least instantaneously we can do that.
+  # Maybe I can linearize the transform from alpha-dot to omega-dot and do a long, fancy cascade. alpha-dot -> omega-dot -> omega -> v__s -> r_0
+  
