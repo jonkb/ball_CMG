@@ -4,6 +4,9 @@
 import time
 import sympy as sp
 from sympy.algebras.quaternion import Quaternion
+import numpy as np
+import quaternion
+
 
 """
 verbosity (int): How much to print
@@ -34,19 +37,33 @@ def toc(times, msg=None, total=False):
     t = times[-1] - times[0] if total else times[-1] - times[-2]
     print(f"{msg} time: {t:.6f} s")
 
-def sharp(v):
+def sharp(v, use_np=False):
   """ 
   "Sharp" operator in Putkaradze paper
   Takes an R3 vector and turns it into a quaternion
   """
-  return Quaternion(0, v[0], v[1], v[2])
+  if use_np:
+    return np.quaternion(0, v[0], v[1], v[2])
+  else:
+    return Quaternion(0, v[0], v[1], v[2])
 
-def flat(q):
+def sharpn(v):
+  # Shortcut for sharp(v, use_np=True)
+  return sharp(v, use_np=True)
+
+def flat(q, use_np=False):
   """ 
   "Flat" operator in Putkaradze paper
   Takes a quaternion and turns it into an R3 vector
   """
-  return sp.Matrix([[q.b], [q.c], [q.d]])
+  if use_np:
+    return np.array([q.x, q.y, q.z])
+  else:
+    return sp.Matrix([[q.b], [q.c], [q.d]])
+
+def flatn(q):
+  # Shortcut for flat(q, use_np=True)
+  return flat(q, use_np=True)
 
 def printv(vlvl, *msgs):
   """ Simple print wrapper

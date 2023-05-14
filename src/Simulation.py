@@ -5,233 +5,43 @@ Simulation class to hold the parameters of a simulation
 import numpy as np
 import scipy.integrate as spi
 # from scipy.misc import derivative as spd
-import scipy.optimize as spo
 from matplotlib import pyplot as plt
 from matplotlib import animation
 import dill
 
 import dynamics as dyn
-from CMGBall import CMGBall
 
 class Simulation:
   status = "unsolved"
-  alphaddf = None
-  control_mode = None
-  p_des = None
-  a_des = None
   sol = None
-  # Parameters for MPC
-  MPCprms = {
-    "t_window": .25,
-    "N_vpoly": 3,
-    "N_sobol": 32, # Should be a power of 2
-    "N_eval": 5,
-    "ratemax": 200, #Hz
-    "vweight": 0.001 # Weight on v_err relative to x_err
-  }
-  t_MPChist = [] # List of each time MPC optimization is run
-  v_MPChist = [] # List of v vectors from each time MPC is run
   
-  def __init__(self, alphadd, p_des=None, a_des=None, ball=CMGBall(), t_max=1, 
-      x0=None, Mf=None, Ff=None, axf=None, ayf=None, MPCprms={}):
+  def __init__(self, ball, controller, t_max=1, x0=None):
     """
-    alphadd: Gyro acceleration alpha-double-dot
-      Either pass a scalar, a function of time, or one of the following:
-        "FF": Feedforward control
-      If one of those strings is passed, then p_des, v_des, or a_des must be 
-        passed as well.
-      p_des: Desired position. Either a function of time or a 2x0 point.
-      a_des: Desired acceleration. Either a function of time or a 2x0 vector.
-      ball: A CMGBall object
-      t_max: Simulation end time
-      x0: Initial conditions (see dyn.eom for state vector description)
-      Mf, Ff, axf, ayf: Lambdified dynamics functions. If not provided, they
-        will be loaded from file.
+    ball: A CMGBall object
+    controller: Controller object that calculates control inputs
+    t_max: Simulation end time
+    x0: Initial conditions (see dyn.eom for state vector description)
     """
-    
-    ## Input handling
-    if callable(alphadd):
-      self.alphaddf = alphadd
-    elif isinstance(alphadd, float):
-      self.alphaddf = lambda t: alphadd
-    elif alphadd == "FF":
-      self.control_mode = "FF"
-    elif alphadd == "MPC":
-      self.control_mode = "MPC"
-    else:
-      assert False, "Unknown alphadd"
-    
-    if self.control_mode is not None:
-      if p_des is not None:
-        if callable(p_des):
-          self.p_des = p_des
-        else:
-          self.p_des = lambda t: p_des
-      elif a_des is not None:
-        if callable(a_des):
-          self.a_des = a_des
-        else:
-          self.a_des = lambda t: a_des
-      else:
-        assert False, ("Must provide a desired path or acceleration when "
-          "using a control mode")
     
     self.ball = ball
     self.t_max = t_max
+    self.controller = controller
     
     if x0 is None:
       x0 = np.zeros(11)
       x0[0] = 1 # Real part of quaternion starts at 1
     self.x0 = x0
-    
-    if Mf is None or Ff is None:
-      self.Mf, self.Ff = self.load_MfFf()
-    if axf is None or ayf is None:
-      self.axf, self.ayf = self.load_axfayf()
-    
-    for key, val in MPCprms.items():
-      self.MPCprms[key] = val
   
   def __str__(self):
     s = "Simulation Object\n"
     s += f"\tstatus: {self.status}\n"
-    s += f"\tcontrol_mode: {self.control_mode}\n"
+    s += f"\tcontroller: {self.controller}\n"
     s += f"\tt_max: {self.t_max}\n"
     s += f"\tx0: {self.x0}\n"
     # Cut off final \n and indent the whole block
     sball = str(self.ball)[0:-1].replace("\n", "\n\t")
     s += f"\tball: {sball}\n"
-    s += f"\tMPCprms: {self.MPCprms}\n"
     return s
-  
-  def load_MfFf(self):
-    M, F = dyn.load_MF()
-    return dyn.lambdify_MF(M, F, ball=self.ball)
-  
-  def load_axfayf(self):
-    ax, ay = dyn.load_axay()
-    return dyn.lambdify_axay(ax, ay, ball=self.ball)
-  
-  def alphadd_FF(self, t, x):
-    """ Return the acceleration calculated by feedforward control
-    """
-    
-    # Get a_des
-    if self.p_des is not None:
-      kp = 10 # TODO: Make this a parameter
-      to_goal = self.p_des(t) - np.array([x[7], x[8]])
-      a_des = kp*to_goal
-    elif self.a_des is not None:
-      a_des = self.a_des(t)
-    else:
-      assert False, "Must supply desired path to use FF control"
-    
-    def err(alphadd):
-      # See how close this alphadd is to giving a_des
-      xd = dyn.eom(self.Mf, self.Ff, x, alphadd, ball=self.ball)
-      #s_axay = (eta, ex, ey, ez, omega_x, omega_y, omega_z, etad, exd, eyd, ezd, omega_xd, omega_yd, omega_zd)
-      s_axay = (*x[0:7], *xd[0:7])
-      a_vec = np.array([self.axf(*s_axay), self.ayf(*s_axay)])
-      # L2 error
-      return np.sum(np.square(a_des - a_vec))
-    
-    alphadd_bounds = (-self.ball.alphadd_max, self.ball.alphadd_max)
-    res = spo.minimize_scalar(err, method="bounded", bounds=alphadd_bounds, 
-      options={"maxiter":10}) # TODO: maxiter parameter
-    #print(f"Error: {res.fun}, nit: {res.nit}, res.x: {res.x}")
-    print(f"t: {t}, error: {res.fun}, nfev: {res.nfev}, res.x: {res.x}")
-    # TODO: Decide adaptively to do MPC instead if error is too large
-    return res.x
-  
-  def alphadd_v(self, t, v):
-    """ Parameterized acceleration function to be optimized in MPC
-    v is formatted as a polynomial
-    f = v[0] + v[1]*t + v[2]*t**2 + ... + v[n]*t**n
-    """
-    
-    # Equivalent, but possibly slower method:
-    # for n,vi in enumerate(v):
-      # a += vi*t**n
-    # return a
-    
-    t__n = np.power(t*np.ones_like(v), np.arange(len(v)))
-    
-    return np.sum(np.multiply(v,t__n))
-  
-  def alphadd_MPC(self, t, x):
-    """ Return the acceleration calculated by MPC
-    Procedure:
-    1. Check if we've already optimized the input for a time point very close 
-      to this one.
-    2. If not, simulate ahead for some amount of time
-    3. Score the resultant path
-    4. Optimize 2 & 3
-    """
-    
-    # Unpack MPCprms
-    t_window = self.MPCprms["t_window"]
-    N_vpoly = self.MPCprms["N_vpoly"]
-    N_sobol = self.MPCprms["N_sobol"]
-    N_eval = self.MPCprms["N_eval"]
-    ratemax = self.MPCprms["ratemax"]
-    vweight = self.MPCprms["vweight"]
-    
-    if len(self.t_MPChist) > 0:
-      t_diff = np.abs(np.array(self.t_MPChist) - t)
-      diff_min = np.min(t_diff)
-      # Are we close enough to one that's already been optimized?
-      if diff_min < 1.0/ratemax:
-        # Then use solution from that MPC run
-        # Index of closest solution to current time
-        i_closest = np.where(t_diff == diff_min)[0][0]
-        t_closest = self.t_MPChist[i_closest]
-        v_closest = self.v_MPChist[i_closest]
-        alphadd = self.alphadd_v(t-t_closest, v_closest)
-        return alphadd
-      # Otherwise, re-optimize v for alphadd_v(t,v) with MPC
-    
-    if self.p_des is None:
-      assert False, "Must supply desired path to use MPC control"
-    
-    def cost(v):
-      # Simulate using the given input vector v and score the path
-      xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphadd_v, 
-        aldd_args=(t,v), ball=self.ball)
-      # NOTE: this time is relative to the current time, t
-      t_eval = np.linspace(0, t_window, N_eval)
-      sol = spi.solve_ivp(xdot, [0,t_window], y0=x, method="RK23",
-        t_eval=t_eval, dense_output=False, rtol=1e-4, atol=1e-7) # TODO: tol
-      
-      # Compare to desired path
-      p_xy = [self.p_des(ti) for ti in t_eval]
-      p_x = np.array([p[0] for p in p_xy])
-      p_y = np.array([p[1] for p in p_xy])
-      v_x = np.gradient(p_x, t_eval)
-      v_y = np.gradient(p_y, t_eval)
-      vsol_x = np.gradient(sol.y[7], t_eval)
-      vsol_y = np.gradient(sol.y[8], t_eval)
-      # (4xN_MPCeval)
-      err = np.array([p_x-sol.y[7], p_y-sol.y[8], v_x-vsol_x, v_y-vsol_y])
-      weighted_err = err*np.linspace(.1,1,N_eval)
-      weighted_err[2:4,:] *= vweight
-      return np.sum(np.square(weighted_err))
-    
-    # NOTE: Does it make sense to bound higher order terms the same way?
-    v_bounds = (-self.ball.alphadd_max, self.ball.alphadd_max)
-    bounds = [v_bounds]*N_vpoly
-    # Optimize. See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.shgo.html#scipy.optimize.shgo
-    # NOTE: Could switch from Sobol to LHC. Probably wouldn't change much
-    res = spo.shgo(cost, bounds, n=N_sobol, sampling_method='sobol',
-      minimizer_kwargs={"options":{"tol":.1}})
-    
-    v = res.x
-    print(f"t: {t}, cost: {res.fun}, nfev: {res.nfev}, v_opt: {v}")
-    
-    # Store this result to be reused
-    self.t_MPChist.append(t)
-    self.v_MPChist.append(v)
-    
-    return self.alphadd_v(0, v)
   
   def run(self, t_eval=None, fname="sim.dill"):
     """ Run the simulation and store the result
@@ -239,16 +49,8 @@ class Simulation:
       filename upon completion.
     """
     
-    if self.control_mode == "FF":
-      xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphadd_FF, 
-        aldd_args=(t, x), ball=self.ball)
-    elif self.control_mode == "MPC":
-      xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphadd_MPC, 
-        aldd_args=(t, x), ball=self.ball)
-    else:
-      xdot = lambda t,x: dyn.eom(self.Mf, self.Ff, x, self.alphaddf, 
-        aldd_args=(t,), ball=self.ball)
-
+    xdot = lambda t,x: self.ball.eom(x, self.controller.update(t, x))
+    
     # Solving the IVP
     self.status = "running"
     print("Solving IVP")
@@ -274,9 +76,15 @@ class Simulation:
   
   def save(self, fname="sim.dill"):
     # Save to file
-    ssim = SerializableSim(self)
+    
+    # TODO: SerializableSim
+    # ssim = SerializableSim(self)
+    # with open(fname,"wb") as file:
+      # dill.dump(ssim, file)
+    # print(f"Simulation saved to {fname}")
+    
     with open(fname,"wb") as file:
-      dill.dump(ssim, file)
+      dill.dump(self, file)
     print(f"Simulation saved to {fname}")
   
   def xeval(self, t=None):
@@ -308,12 +116,11 @@ class Simulation:
     else:
       x = self.sol.sol(t)
     
-    # Evaluate alphadd @ t
-    if self.alphaddf is None:
-      # Differentiate alphad
-      alphadd = np.gradient(x[10,:], t)
-    else:
-      alphadd = self.alphaddf(t)
+    ## Evaluate alphadd @ t
+    #alphadd = [self.controller.update(ti, xi) for ti, xi in zip(t, x)]
+    
+    # Differentiate alphad
+    alphadd = np.gradient(x[10,:], t)
     
     return t, x, alphadd
   
@@ -385,7 +192,7 @@ class Simulation:
     return fig, axs
   
   @staticmethod
-  def plot_anim(t, x, p_des, a_des, fig=None, ax=None):
+  def plot_anim(t, x, p_des=None, a_des=None, fig=None, ax=None):
     """ Plot an animation of the ball rolling
     """
     
@@ -409,25 +216,26 @@ class Simulation:
       ax.set_aspect("equal")
       ax.grid()
     
-    # Build px, py vectors (desired path)
-    px = None
-    py = None
-    if p_des is not None:
-      px = np.zeros(t.shape)
-      py = np.zeros(t.shape)
-      for i, ti in enumerate(t):
-        pxi, pyi = p_des(ti)
-        px[i] = pxi
-        py[i] = pyi
-    elif a_des is not None:
-      px = np.zeros(t.shape)
-      py = np.zeros(t.shape)
-      v_xy = lambda ti: spi.quad_vec(a_desf, min(t), ti)[0]
-      p_xy = lambda ti: spi.quad_vec(v_xy, min(t), ti)[0]
-      for i, ti in enumerate(t):
-        pxi, pyi = p_xy(ti)
-        px[i] = pxi
-        py[i] = pyi
+    # Build px, py vectors (desired path) #TODO
+    if False:
+      px = None
+      py = None
+      if p_des is not None:
+        px = np.zeros(t.shape)
+        py = np.zeros(t.shape)
+        for i, ti in enumerate(t):
+          pxi, pyi = p_des(ti)
+          px[i] = pxi
+          py[i] = pyi
+      elif a_des is not None:
+        px = np.zeros(t.shape)
+        py = np.zeros(t.shape)
+        v_xy = lambda ti: spi.quad_vec(a_desf, min(t), ti)[0]
+        p_xy = lambda ti: spi.quad_vec(v_xy, min(t), ti)[0]
+        for i, ti in enumerate(t):
+          pxi, pyi = p_xy(ti)
+          px[i] = pxi
+          py[i] = pyi
     
     # Animate
     # https://jakevdp.github.io/blog/2012/08/18/matplotlib-animation-tutorial/
@@ -435,7 +243,7 @@ class Simulation:
     # Set up animation
     ph = None
     # Desired path line
-    if (px is not None):
+    if False:# (px is not None):
       #print(px, py)
       #ph, = ax.plot(px, py, linestyle="-", color="g", marker=".")
       ph, = ax.plot([px[0]], [py[0]], linestyle="-", color="g", marker=".")
@@ -448,7 +256,7 @@ class Simulation:
     def init_back():
       circle.set_data([], [])
       rh.set_offsets(np.array((0,2)))
-      if (px is not None):
+      if False:# (px is not None):
         ph.set_data([], [])
         return circle, rh, ph
       return circle, rh
@@ -459,7 +267,7 @@ class Simulation:
       ry = x[8,i]
       circle.set_data([rx], [ry])
       rh.set_offsets(x[7:9,0:i].T)
-      if px is not None:
+      if False: # px is not None:
         #print(px[0:i])
         ph.set_data(px[0:i], py[0:i])
         return circle, rh, ph
@@ -591,7 +399,7 @@ class Simulation:
       fig1.show()
     
     # Animation
-    fig2, ax = self.plot_anim(t, x, self.p_des, self.a_des)
+    fig2, ax = self.plot_anim(t, x)#, self.p_des, self.a_des)
     
     return fig1, fig2
 
@@ -600,9 +408,15 @@ class SerializableSim:
     """
     Convert a Simulation object (sim) to a serializable form.
     This allows it to be saved to file.
-    The lambdified functions have a hard time being serialized, so leave them
-      out.
+    The lambdified sympy functions have a hard time being serialized, so leave 
+      them out.
     """
+    
+    self.ball = sim.ball
+    self.controller = sim.controller
+    
+    
+    
     
     self.alphaddf = sim.alphaddf
     self.p_des = sim.p_des

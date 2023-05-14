@@ -5,6 +5,7 @@ Launching point
 import numpy as np
 from Simulation import Simulation
 from CMGBall import CMGBall
+from Controller import PreSet, FF
 from util import tic, toc
 
 def setup():
@@ -18,10 +19,17 @@ def setup():
   return M, F, ax, ay
 
 def simple_test():
+  """ Simple preset control input test
+  """
+  
   #alphaddf = lambda t: 10*np.exp(t)
   alphaddf = lambda t: 10*np.ones_like(t)
   #alphaddf = lambda t: 24*np.cos(2*np.pi*t)
-  sim = Simulation(alphaddf, t_max=1.5)
+  cnt = PreSet(ball, alphaddf)
+
+  ball = CMGBall()
+  sim = Simulation(ball, cnt, t_max=2.0)
+  
   sim.run(fname="tmp.dill")
   return sim
 
@@ -30,12 +38,17 @@ def load_test():
   return sim
 
 def FF_test(tag):
-  p_desf = np.array([1,1])
-  sim = Simulation("FF", p_des=p_desf, t_max=1)
+  v_des = np.array([.2,.1])
+  ref = lambda t: v_des
+  ball = CMGBall()
+  
+  cnt = FF(ball, ref, ref_type="v")
+  sim = Simulation(ball, cnt, t_max=2.0)
   sim.run(fname=f"FF_test{tag}.dill")
   return sim
 
 def MPC_test(tag):
+  # TODO
   MPCprms = {
     "t_window": .25,
     "N_vpoly": 3,
@@ -115,9 +128,9 @@ if __name__ == "__main__":
   #print(f"Loaded simulation from file: {fname}")
   
   # Run a new simulation
-  sim = simple_test()
+  #sim = simple_test()
   #sim = load_test()
-  #sim = FF_test()
+  sim = FF_test("0513_0")
   #sim = MPC_test("CAEDM14")
   #sim = FF_test("CAEDMFF1")
   #toc(times, "Simulation")
