@@ -333,8 +333,45 @@ if __name__ == "__main__":
   #     (alphad != 0 AND alpha != 0,pi,-pi) --> qd != 0
   #     I don't think I can say that (alpha = 0,pi,-pi) --> Anything
   #     But in some cases, at least... I've observed that alpha=0 --> no acceleration of omega_x (if we're starting at rest). To show that, I need the mapping omegad = f(alpha,alphad)
+  #     Okay, I guess I can say that (alpha=0) implies that (alpha-dot *might* not be zero at equilibrium).
   
   # For control: state the reference position in the sphere-fixed frame.
   # There's a clear transform from omega to position (in sphere-fixed frame). Er... that's actually tricky bc the sphere rolls. Well, there's an easy transform from omega to velocity in sphere-fixed frame, so at least instantaneously we can do that.
   # Maybe I can linearize the transform from alpha-dot to omega-dot and do a long, fancy cascade. alpha-dot -> omega-dot -> omega -> v__s -> r_0
+  
+  
+  
+  # Jacobian Linearization
+  # First question: can I invert the mass matrix
+  #Mi = M.inv()
+  #print(Mi)
+  # Ran for ~5min w/o finishing
+  # omega_dot = M.gauss_jordan_solve(F) # SLOW
+  omega_dot = M.LUsolve(F)
+  # OH, that solved nicely
+  print(351)
+  omega_dot = omega_dot.applyfunc(lambda x: x.expand())
+  print("EOM1: omega_x-dot = ")
+  sp.pprint(omega_dot[0,0])
+  # print(omega_dot)
+  with open("tmp_omega_dot.srepr","w") as file:
+    omega_dot_str = sp.srepr(omega_dot)
+    file.write(omega_dot_str)
+  
+  
+  svars_in_od = []
+  for svar in dir(spn):
+    var = getattr(spn, svar)
+    if omega_dot.has(var):
+      svars_in_od.append(svar)
+  print(f"omega_dot has: {', '.join(svars_in_M)}")
+  
+  # Now we have omega_dot (3x1) as a function of (Ig1, Ig2, Is, Rs, alpha, eta, ex, ey, ez, m, t)
+  quit()
+  
+  # Build Jacobian for linearization
+  J = sp.Matrix([
+    []
+  ])
+  
   
