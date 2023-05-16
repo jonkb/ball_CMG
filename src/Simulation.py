@@ -9,23 +9,19 @@ from matplotlib import pyplot as plt
 from matplotlib import animation
 import dill
 
-import dynamics as dyn
-
 class Simulation:
   status = "unsolved"
   sol = None
   
-  def __init__(self, ball, controller, t_max=1, x0=None):
+  def __init__(self, controller, t_max=1, x0=None):
     """
-    ball: A CMGBall object
     controller: Controller object that calculates control inputs
     t_max: Simulation end time
-    x0: Initial conditions (see dyn.eom for state vector description)
+    x0: Initial conditions (see dynamics.eom for state vector description)
     """
     
-    self.ball = ball
-    self.t_max = t_max
     self.controller = controller
+    self.t_max = t_max
     
     if x0 is None:
       x0 = np.zeros(11)
@@ -35,13 +31,16 @@ class Simulation:
   def __str__(self):
     s = "Simulation Object\n"
     s += f"\tstatus: {self.status}\n"
-    s += f"\tcontroller: {self.controller}\n"
+    # Cut off final \n and indent the whole block
+    scnt = str(self.controller)[0:-1].replace("\n", "\n\t")
+    s += f"\tcontroller: {scnt}\n"
     s += f"\tt_max: {self.t_max}\n"
     s += f"\tx0: {self.x0}\n"
-    # Cut off final \n and indent the whole block
-    sball = str(self.ball)[0:-1].replace("\n", "\n\t")
-    s += f"\tball: {sball}\n"
     return s
+  
+  @property
+  def ball(self):
+    return self.controller.ball
   
   def run(self, t_eval=None, fname="sim.dill"):
     """ Run the simulation and store the result
@@ -77,14 +76,13 @@ class Simulation:
   def save(self, fname="sim.dill"):
     # Save to file
     
-    # TODO: SerializableSim
-    # ssim = SerializableSim(self)
     # with open(fname,"wb") as file:
-      # dill.dump(ssim, file)
+      # dill.dump(self, file)
     # print(f"Simulation saved to {fname}")
     
+    ssim = SerializableSim(self)
     with open(fname,"wb") as file:
-      dill.dump(self, file)
+      dill.dump(ssim, file)
     print(f"Simulation saved to {fname}")
   
   def xeval(self, t=None):
@@ -190,6 +188,31 @@ class Simulation:
     axs[2,1].set_title("Y-Position $ry$")
     
     return fig, axs
+  
+  def plot_tym(self, t, ym=None, x=None, alphadd=None):
+    """ Plot the measured output from simulation results x(t) and input 
+      alphadd(t)
+      
+    Either pass ym or x & alphadd
+    
+    Returns fig, ax
+    """
+    
+    if ym is None:
+      accels = [self.controller.ball.measure(xi, alphaddi)[0] for (xi,alphaddi) 
+        in zip(x.T, alphadd)]
+    else:
+      accels = ym[0,:]
+    rddx = [accel[0] for accel in accels]
+    rddy = [accel[1] for accel in accels]
+    rddz = [accel[2] for accel in accels]
+    fig, ax = plt.subplots()
+    ax.plot(t, rddx, label="$\ddot{r}_x$")
+    ax.plot(t, rddy, label="$\ddot{r}_y$")
+    ax.plot(t, rddz, label="$\ddot{r}_z$")
+    fig.legend()
+    
+    return fig, ax
   
   @staticmethod
   def plot_anim(t, x, p_des=None, a_des=None, fig=None, ax=None):
@@ -393,15 +416,19 @@ class Simulation:
     t, x, alphadd = self.xeval(t=t_eval)
 
     # Plot state vector as a function of time
-    fig1, axs = self.plot_tx(t, x, alphadd)
+    fig1, axs1 = self.plot_tx(t, x, alphadd)
+    
+    # Plot measured values as a function of time
+    fig2, ax2 = self.plot_tym(t, x=x, alphadd=alphadd)
     
     if show:
       fig1.show()
+      fig2.show()
     
     # Animation
-    fig2, ax = self.plot_anim(t, x)#, self.p_des, self.a_des)
+    fig3, ax3 = self.plot_anim(t, x)#, self.p_des, self.a_des)
     
-    return fig1, fig2
+    return fig1, fig2, fig3
 
 class SerializableSim:
   def __init__(self, sim):
@@ -412,48 +439,44 @@ class SerializableSim:
       them out.
     """
     
-    self.ball = sim.ball
     self.controller = sim.controller
-    
-    
-    
-    
-    self.alphaddf = sim.alphaddf
-    self.p_des = sim.p_des
-    self.a_des = sim.a_des
-    self.ball = sim.ball
     self.t_max = sim.t_max
     self.x0 = sim.x0
-    self.MPCprms = sim.MPCprms
     # The following are not in the Simulation constructor
     self.status = sim.status
-    self.control_mode = sim.control_mode
     self.sol = sim.sol
-    self.t_MPChist = sim.t_MPChist
-    self.v_MPChist = sim.v_MPChist
+    # Make controller.ball serializable
+    self.controller = self.controller.serializable()
+    # self.controller.ball = sim.controller.ball.serializable()
   
-  def to_sim(self, Mf=None, Ff=None, axf=None, ayf=None):
+  def to_sim(self):
     """
     Convert this to a normal Simulation object
     """
-    if "MPCprms" not in dir(self):
-      # Older versions may not have this
-      self.MPCprms = {}
     
-    if self.alphaddf is None:
-      self.alphaddf = self.control_mode
+    # Convert the SerializableBall in controller back to a CMGBall
+    self.controller = self.controller.from_serializable()
+    # self.controller.ball = self.controller.ball.to_ball()
     
-    sim = Simulation(self.alphaddf, p_des=self.p_des, a_des=self.a_des, 
-      ball=self.ball, t_max=self.t_max, x0=self.x0, Mf=Mf, Ff=Ff, axf=axf, 
-      ayf=ayf, MPCprms=self.MPCprms)
+    sim = Simulation(self.controller, t_max=self.t_max, x0=self.x0)
     sim.status = self.status
-    sim.control_mode = self.control_mode
     sim.sol = self.sol
-    
-    if "t_MPChist" in dir(self):
-      # Older versions may not have these
-      sim.t_MPChist = self.t_MPChist
-      sim.v_MPChist = self.v_MPChist
     
     return sim
   
+
+if __name__ == "__main__":
+  # TEST Serialization
+  from CMGBall import CMGBall
+  from Controller import PreSet
+  ball = CMGBall()
+  cnt = PreSet(ball, 1.0)
+  sim = Simulation(cnt)
+  print(447, sim)
+  # print(448, dir(sim))
+  # print(449, sim.controller)
+  # print(450, sim.controller.ball)
+  fname ="testinggggg.dill"
+  sim.save(fname)
+  siml = Simulation.load(fname)
+  print(453, siml)

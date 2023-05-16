@@ -22,13 +22,14 @@ def simple_test():
   """ Simple preset control input test
   """
   
+  alphadd = 0.2
   #alphaddf = lambda t: 10*np.exp(t)
-  alphaddf = lambda t: 10*np.ones_like(t)
+  # alphaddf = lambda t: alphadd*np.ones_like(t)
   #alphaddf = lambda t: 24*np.cos(2*np.pi*t)
-  cnt = PreSet(ball, alphaddf)
+  ball = CMGBall(ra=np.array([0.02, 0, 0]))
+  cnt = PreSet(ball, alphadd)
 
-  ball = CMGBall()
-  sim = Simulation(ball, cnt, t_max=2.0)
+  sim = Simulation(cnt, t_max=0.75)
   
   sim.run(fname="tmp.dill")
   return sim
@@ -43,12 +44,15 @@ def FF_test(tag):
   ball = CMGBall()
   
   cnt = FF(ball, ref, ref_type="v")
-  sim = Simulation(ball, cnt, t_max=2.0)
+  sim = Simulation(cnt, t_max=2.0)
   sim.run(fname=f"FF_test{tag}.dill")
   return sim
 
 def MPC_test(tag):
-  # TODO
+  # TODO: Fix this to fit new scheme
+  print("MPC not yet implemented")
+  return None
+  
   MPCprms = {
     "t_window": .25,
     "N_vpoly": 3,
@@ -57,7 +61,7 @@ def MPC_test(tag):
     "ratemax": 150, #Hz
     "vweight": 0#.005
   }
-  #p_desf = np.array([1,3])
+  # p_desf = np.array([1,3])
   p_desf = lambda t: (1-np.exp(-3*t))*np.array([1,2])
   sim = Simulation("MPC", p_des=p_desf, t_max=3, MPCprms=MPCprms)
   fname = f"MPC_{tag}.dill"
@@ -128,9 +132,9 @@ if __name__ == "__main__":
   #print(f"Loaded simulation from file: {fname}")
   
   # Run a new simulation
-  #sim = simple_test()
-  #sim = load_test()
-  sim = FF_test("0513_0")
+  sim = simple_test()
+  # sim = load_test()
+  # sim = FF_test("0513_0")
   #sim = MPC_test("CAEDM14")
   #sim = FF_test("CAEDMFF1")
   #toc(times, "Simulation")

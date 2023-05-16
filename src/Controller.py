@@ -3,12 +3,32 @@ Classes for the control schemes
 """
 import numpy as np
 import scipy.optimize as spo
+from copy import copy
 
 class Controller:
   """
   Parent class
   """
-  pass
+  
+  name = "Parent Controller"
+  ball = None
+  
+  def __str__(self):
+    s = self.name + "\n"
+    # Cut off final \n and indent the whole block
+    sball = str(self.ball)[0:-1].replace("\n", "\n\t")
+    s += f"\tball: {sball}\n"
+    return s
+  
+  def serializable(self):
+    scnt = copy(self)
+    scnt.ball = scnt.ball.serializable()
+    return scnt
+  
+  def from_serializable(self):
+    cnt = copy(self)
+    cnt.ball = cnt.ball.to_ball()
+    return cnt
 
 class PreSet(Controller):
   """
@@ -16,23 +36,25 @@ class PreSet(Controller):
     of time.
   """
   
+  name = "Preset alphadd Controller"
+  
   def __init__(self, ball, alphadd):
     self.ball = ball
     self.alphadd = alphadd
   
-  def __str__(self):
-    return "Preset alphadd"
-  
   def update(self, t, x):
     if callable(self.alphadd):
-      return self.alphadd(t)
+      alphadd = self.alphadd(t)
     else:
-      return self.alphadd
+      alphadd = self.alphadd
+    return self.ball.aa2pwm(alphadd)[1]
 
 class FF(Controller):
   """ Feedforward control
   Calculate alphadd to cause the desired acceleration
   """
+  
+  name = "Feedforward Controller"
   
   def __init__(self, ball, ref, ref_type="v"):
     """
@@ -45,9 +67,7 @@ class FF(Controller):
     self.ref = ref
     self.ref_type = ref_type
     self.kp_ref = 10
-  
-  def __str__(self):
-    return "Feedforward controller"
+    self.opt_maxiter = 10
   
   def a_des(self, t, p, v):
     """ Outer loop: ref --> a_des
@@ -90,7 +110,7 @@ class FF(Controller):
     
     alphadd_bounds = (-self.ball.alphadd_max, self.ball.alphadd_max)
     res = spo.minimize_scalar(err, method="bounded", bounds=alphadd_bounds, 
-      options={"maxiter":10}) # TODO: maxiter parameter
+      options={"maxiter":self.opt_maxiter})
     # if abs( (t*100) % 1 ) < 0.01:
     if np.random.rand() < 0.01:
       # Display how close we got
@@ -119,37 +139,6 @@ if False: # Copied from Simulation
     self.MPCprms[key] = val
     
   s += f"\tMPCprms: {self.MPCprms}\n"
-
-  def alphadd_FF(self, t, x):
-    """ Return the acceleration calculated by feedforward control
-    """
-    
-    # Get a_des
-    if self.p_des is not None:
-      kp = 10 # TODO: Make this a parameter
-      to_goal = self.p_des(t) - np.array([x[7], x[8]])
-      a_des = kp*to_goal
-    elif self.a_des is not None:
-      a_des = self.a_des(t)
-    else:
-      assert False, "Must supply desired path to use FF control"
-    
-    def err(alphadd):
-      # See how close this alphadd is to giving a_des
-      xd = dyn.eom(self.Mf, self.Ff, x, alphadd, ball=self.ball)
-      #s_axay = (eta, ex, ey, ez, omega_x, omega_y, omega_z, etad, exd, eyd, ezd, omega_xd, omega_yd, omega_zd)
-      s_axay = (*x[0:7], *xd[0:7])
-      a_vec = np.array([self.axf(*s_axay), self.ayf(*s_axay)])
-      # L2 error
-      return np.sum(np.square(a_des - a_vec))
-    
-    alphadd_bounds = (-self.ball.alphadd_max, self.ball.alphadd_max)
-    res = spo.minimize_scalar(err, method="bounded", bounds=alphadd_bounds, 
-      options={"maxiter":10}) # TODO: maxiter parameter
-    #print(f"Error: {res.fun}, nit: {res.nit}, res.x: {res.x}")
-    print(f"t: {t}, error: {res.fun}, nfev: {res.nfev}, res.x: {res.x}")
-    # TODO: Decide adaptively to do MPC instead if error is too large
-    return res.x
   
   def alphadd_v(self, t, v):
     """ Parameterized acceleration function to be optimized in MPC
