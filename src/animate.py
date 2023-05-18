@@ -1,5 +1,5 @@
 """
-Make an animation from a solved simulation.
+Make a 3D animation from a solved simulation.
 
 Requires PyQt5
 """

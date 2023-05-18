@@ -10,10 +10,12 @@ class CMGBall:
   """
   Stores the parameters of the CMG ball robot. Also stores the dynamics, as
     loaded from file.
-  
-  TODO: Use sensor measurements for control instead of full state vector. 
-    (I.e. observer-based control)
   """
+  # Constants
+  n_x = 11 # Length of state vector
+  n_u = 1 # Number of inputs. Currently only n_u=1 is supported
+  n_ym = 3 # Number of measurements.
+  g = 9.8 # Gravity
   
   def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
       km=20, ra=np.array([0, 0, 0])):
@@ -43,7 +45,7 @@ class CMGBall:
     """
     The physical system maps pwm to voltage to alpha motor torque and from
     torque to acceleration.
-    This variable attempts to represent that conversion.
+    This km variable attempts to represent that conversion.
     TODO: Maybe represent that this mapping is more complex & nonlinear, 
     including the effects of the gearbox.
     """
@@ -111,6 +113,36 @@ class CMGBall:
     vx = Rs*omega_s__0[1]
     vy = -Rs*omega_s__0[0]
     return np.array([vx, vy])
+  
+  def x2a(self, x, u, xd=None, proper=False):
+    """ Calculate the linear acceleration from the state vector x
+    (In the 0-frame)
+    
+    if proper == True, return "proper" acceleration, including gravity.
+      Otherwise, don't include gravity
+      
+    NOTE: This is repeated as part of measure
+    """
+    
+    if xd is None:
+      # Acceleration depends on x-dot
+      xd = self.eom(x, u)
+    
+    # Extract info from x & xd
+    # q: active rotation from 0 to s or passive rotation from s to 0
+    q_s0 = np.quaternion(x[0], x[1], x[2], x[3])
+    omegad_s__s = xd[4:7]
+    
+    # Rotations
+    #   p' = q p q* (normal conjugation)
+    omegad_s__0 = flatn(q_s0 * sharpn(omegad_s__s) * q_s0.conjugate())
+    
+    # Linear acceleration of sphere
+    rdd_x = Rs*omegad_s__0[1]
+    rdd_y = -Rs*omegad_s__0[0]
+    #   If proper acceleration, include gravity
+    rdd_s__0 = np.array([rdd_x, rdd_y, (self.g if proper else 0)])
+    return rdd_s__0
   
   def eom(self, x, u):
     """ Evaluate state-variable EOM
@@ -182,7 +214,6 @@ class CMGBall:
     # Constants
     khat = np.array([0,0,1])
     Rs = self.Rs
-    g = 9.8
     
     if xd is None:
       # Acceleration measurements depend on x-dot
@@ -209,7 +240,7 @@ class CMGBall:
     rdd_x = Rs*omegad_s__0[1]
     rdd_y = -Rs*omegad_s__0[0]
     # NOTE: The accelerometer measures gravity as well
-    rdd_s__0 = np.array([rdd_x, rdd_y, g])
+    rdd_s__0 = np.array([rdd_x, rdd_y, self.g])
     # Vector addition for acceleration of accel
     #   The following are all in the a-frame
     rdd_s__a = flatn(q_sa * q_s0.conjugate() * 

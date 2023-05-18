@@ -5,7 +5,7 @@ Launching point
 import numpy as np
 from Simulation import Simulation
 from CMGBall import CMGBall
-from Controller import PreSet, FF
+from Controller import PreSet, FF, MPC
 from util import tic, toc
 
 def setup():
@@ -17,6 +17,15 @@ def setup():
   M, F = dyn.derive_EOM()
   ax, ay = find_axay(M, F)
   return M, F, ax, ay
+
+def dt_test():
+  alphadd = 0.2
+  ball = CMGBall(ra=np.array([0.02, 0, 0]))
+  cnt = PreSet(ball, alphadd)
+  sim = Simulation(cnt, t_max=4.0)
+  
+  sim.run_dt()#fname="tmpp.dill")
+  return sim
 
 def simple_test():
   """ Simple preset control input test
@@ -39,34 +48,32 @@ def load_test():
   return sim
 
 def FF_test(tag):
-  v_des = np.array([.2,.1])
-  ref = lambda t: v_des
+  # v_des = np.array([.2,.1])
+  # ref = lambda t: v_des
+  ref = lambda t: (1-np.exp(-4*t))*np.array([2.0,0.5])
   ball = CMGBall()
   
-  cnt = FF(ball, ref, ref_type="v")
-  sim = Simulation(cnt, t_max=2.0)
-  sim.run(fname=f"FF_test{tag}.dill")
+  cnt = FF(ball, ref, ref_type="p")
+  sim = Simulation(cnt, t_max=5.0)
+  # sim.run(fname=f"FF_test{tag}.dill")
+  sim.run_dt(plotting=False)
   return sim
 
 def MPC_test(tag):
-  # TODO: Fix this to fit new scheme
-  print("MPC not yet implemented")
-  return None
   
+  p_ref = lambda t: np.array([-0.5,2.5])#*(1-np.exp(-4*t))
+  ball = CMGBall()
   MPCprms = {
-    "t_window": .25,
-    "N_vpoly": 3,
-    "N_sobol": 32, # Should be a power of 2
-    "N_eval": 4,
-    "ratemax": 150, #Hz
-    "vweight": 0#.005
+    "N_window": 5,
+    "ftol_opt": 0.01,
+    "maxit_opt": 4,
+    "v0_penalty": 0.05
   }
-  # p_desf = np.array([1,3])
-  p_desf = lambda t: (1-np.exp(-3*t))*np.array([1,2])
-  sim = Simulation("MPC", p_des=p_desf, t_max=3, MPCprms=MPCprms)
+  cnt = MPC(ball, p_ref, ref_type="p", dt_cnt=0.25, 
+    options=MPCprms)
+  sim = Simulation(cnt, t_max=5.0)
   fname = f"MPC_{tag}.dill"
-  sim.save(fname)
-  sim.run(fname=fname)
+  sim.run_dt(plotting=True, fname=fname)
   return sim
 
 def prmvar(template_sim, tag):
@@ -132,15 +139,17 @@ if __name__ == "__main__":
   #print(f"Loaded simulation from file: {fname}")
   
   # Run a new simulation
-  sim = simple_test()
+  # sim = simple_test()
   # sim = load_test()
-  # sim = FF_test("0513_0")
-  #sim = MPC_test("CAEDM14")
+  # sim = FF_test("0517_2")
+  # sim = dt_test()
+  sim = MPC_test("0517_1")
   #sim = FF_test("CAEDMFF1")
   #toc(times, "Simulation")
   
   print(sim)
-  sim.plot()
+  # sim.plot()
+  input("PRESS ANY KEY TO CONTINUE")
   
   # Test variants of sim
   #prmvar(sim, "prmvartest")
