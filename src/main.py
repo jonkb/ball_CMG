@@ -8,15 +8,19 @@ from CMGBall import CMGBall
 from Controller import PreSet, FF, MPC
 from util import tic, toc
 
+import dill
+
 def setup():
   """ Derive equations of motion
   This should only need to be run once because it saves them to file.
   """
   
+  import dynamics as dyn
   print(" -- Deriving the EOM -- ")
   M, F = dyn.derive_EOM()
-  ax, ay = find_axay(M, F)
-  return M, F, ax, ay
+  EOM = dyn.solve_EOM(M, F)
+  ax, ay = dyn.find_axay()
+  return M, F, EOM, ax, ay
 
 def dt_test():
   alphadd = 0.2
@@ -43,10 +47,6 @@ def simple_test():
   sim.run(fname="tmp.dill")
   return sim
 
-def load_test():
-  sim = Simulation.load("tmp.dill")
-  return sim
-
 def FF_test(tag):
   # v_des = np.array([.2,.1])
   # ref = lambda t: v_des
@@ -55,23 +55,27 @@ def FF_test(tag):
   
   cnt = FF(ball, ref, ref_type="p")
   sim = Simulation(cnt, t_max=5.0)
-  # sim.run(fname=f"FF_test{tag}.dill")
-  sim.run_dt(plotting=False)
+  fname=f"FF_test{tag}.dill"
+  # sim.run(fname)
+  sim.run_dt(plotting=True, fname=fname)
   return sim
 
-def MPC_test(tag):
+def MPC_test(tag, ball=None):
   
-  p_ref = lambda t: np.array([-0.5,2.5])#*(1-np.exp(-4*t))
-  ball = CMGBall()
+  p_ref = lambda t: np.array([-1.5,2.0])#*(1-np.exp(-4*t))
+  if ball is None:
+    ball = CMGBall()
+  
   MPCprms = {
-    "N_window": 5,
+    "N_window": 7,
     "ftol_opt": 0.01,
     "maxit_opt": 4,
-    "v0_penalty": 0.05
+    "v0_penalty": 0.0,
+    "w0_penalty": 0.0001
   }
-  cnt = MPC(ball, p_ref, ref_type="p", dt_cnt=0.25, 
+  cnt = MPC(ball, p_ref, ref_type="p", dt_cnt=0.30, 
     options=MPCprms)
-  sim = Simulation(cnt, t_max=5.0)
+  sim = Simulation(cnt, t_max=4.0)
   fname = f"MPC_{tag}.dill"
   sim.run_dt(plotting=True, fname=fname)
   return sim
@@ -119,6 +123,15 @@ def prmvar(template_sim, tag):
   # Plot everything on top of each other
   Simulation.plot_anims(t, xs, template_sim.p_des, template_sim.a_des)
 
+def load_and_plot(fname="tmp.dill"):
+  """ Load a sim from file & plot it
+  """
+  #fname = "MPC_testCAEDM1.dill" # Hits it exactly
+  print(f"Loading simulation from file: {fname}")
+  sim = Simulation.load(fname)
+  print(sim)
+  sim.plot()
+
 if __name__ == "__main__":
   # Derive the equations of motion and save them to file
   derive = False
@@ -129,26 +142,27 @@ if __name__ == "__main__":
   if derive:
     print(" -- Deriving the EOM -- ")
     toc(times)
-    M, F, ax, ay = setup()
+    M, F, EOM, ax, ay = setup()
     toc(times, "EOM derivation")
+    
+  # Load a pre-generated ball object
+  # fname = "ball_20230518T223742.dill"
+  # with open(fname,"rb") as file:
+    # sball = dill.load(file)
+    # ball = sball.to_ball()
+  # toc(times, "Loading ball")
   
   # Load an existing sim from file
-  #fname = "MPC_testCAEDM1.dill" # Hits it exactly
-  #fname = "MPC_test4.dill"
-  #sim = Simulation.load(fname)
-  #print(f"Loaded simulation from file: {fname}")
+  # load_and_plot("MPC_0517_1.dill")
   
   # Run a new simulation
   # sim = simple_test()
-  # sim = load_test()
-  # sim = FF_test("0517_2")
+  # sim = FF_test("0519_0")
   # sim = dt_test()
-  sim = MPC_test("0517_1")
-  #sim = FF_test("CAEDMFF1")
-  #toc(times, "Simulation")
+  sim = MPC_test("0519_1")
   
-  print(sim)
-  # sim.plot()
+  toc(times, "Simulation")
+  
   input("PRESS ANY KEY TO CONTINUE")
   
   # Test variants of sim

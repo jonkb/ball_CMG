@@ -1,6 +1,7 @@
 """ Utility functions
 """
 
+import datetime
 import time
 import sympy as sp
 from sympy.algebras.quaternion import Quaternion
@@ -36,6 +37,11 @@ def toc(times, msg=None, total=False):
   if msg is not None:
     t = times[-1] - times[0] if total else times[-1] - times[-2]
     print(f"{msg} time: {t:.6f} s")
+
+def ISOnow():
+  # NOTE: I think this is local timezone, which is meh
+  t = datetime.datetime.now()
+  return t.strftime("%Y%m%dT%H%M%S")
 
 def sharp(v, use_np=False):
   """ 

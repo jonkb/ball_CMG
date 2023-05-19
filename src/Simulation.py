@@ -3,7 +3,7 @@ Simulation class to hold the parameters of a simulation
 
 TODO
 DONE 1. Rework this so it can be stepped through interactively
-2. Get a full-state control scheme working decently
+OK 2. Get a full-state control scheme working decently
   Might need to be MPC. If I can get it running real-time, that'd be awesome.
     If not, then maybe pre-optimize a number of trajectories, then pick from
     that set, augmenting with PID / FF.
@@ -73,6 +73,7 @@ class Simulation:
       "should be the smallest dt")
     # Set status
     self.status = "running"
+    print("Starting simulation")
     
     # Full time vector
     v_t = np.arange(0, self.t_max, self.dt_dyn)
@@ -214,7 +215,7 @@ class Simulation:
       #alphadd = [self.cnt.update(ti, xi) for ti, xi in zip(t, x)]
       
       # Differentiate alphad to estimate alphadd
-      u = np.gradient(x[10,:], t)
+      u = np.gradient(x[:,10], t)
       
       # TODO
       ym = None
@@ -288,13 +289,16 @@ class Simulation:
 class SolV:
   def __init__(self, v_t, v_x, v_u, v_ym):
     """ Pack the solution vectors in a single solution object
+    
+    The "V" is for vector, because it stores a bunch of vectors instead of
+      a sol object like spi.integrate
     """
     
+    # print(129, v_t, 131.1, v_x, 131.2, v_u, 131.3, v_ym)
     self.v_t = v_t
     self.v_x = v_x
     self.v_u = v_u
     self.v_ym = v_ym
-    # print(129, v_t, 131.1, v_x, 131.2, v_u, 131.3, v_ym)
   
 
 class SerializableSim:

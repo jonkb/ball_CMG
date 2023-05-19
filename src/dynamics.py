@@ -5,12 +5,18 @@ The strategy behind the dynamics was mostly adapted from the following paper by 
 https://link.springer.com/article/10.1007/s11012-018-0904-5#Sec11
 
 TODO: Change the folder where things are saved by default... maybe.
+
+NOTE: Could train a surrogate for EOMf
 """
+
+import dill # For saving lambdified functions
+dill.settings['recurse'] = True
 
 import sympy as sp
 from sympy.algebras.quaternion import Quaternion
 from sympy.functions.elementary.complexes import conjugate
 from util import sharp, flat, printv
+import sp_namespace as spn
 
 def derive_EOM(save=True):
   """ Derive the equations of motion and save them to file.
@@ -26,7 +32,7 @@ def derive_EOM(save=True):
   
   ## Setup (symbolic variables, rotations, velocities)
   printv(1, "Setting up symbolic variables")
-  import sp_namespace as spn
+  
   
   ## Write Lagrangian
   # Kinetic Energy
@@ -35,7 +41,7 @@ def derive_EOM(save=True):
   T += (1/2*spn.omega_g__g.T * spn.I_g__g * spn.omega_g__g)[0,0]
   T = T.expand()
   printv(2, "T: ", T)
-  L = T # V = 0 (flat surface)
+  L = T # V = 0 (flat surface, COM @ center)
   printv(2, "L: ", L)
 
   ## Lagrangian Derivatives
@@ -153,7 +159,6 @@ def lambdify_MF(M, F, ball):
   """
 
   printv(1, "Lambdifying EOM")
-  import sp_namespace as spn
 
   # Make the substitutions for everything that's not a state variable
   consts = {spn.Is: ball.Is, spn.Ig1: ball.Ig1, spn.Ig2: ball.Ig2, 
@@ -180,14 +185,208 @@ def load_MF():
     F = sp.sympify(F_str)
   return M, F
 
-def find_axay(M, F, save=True):
+def solve_EOM(M=None, F=None, save=True):
+  """ Solve the EOM ([M]{xdot} = {F}) for {xdot}
+  """
+  
+  # Derive M & F if not passed
+  if (M is None) or (F is None):
+    M, F = derive_EOM(save=False)
+  
+  printv(1, "Solving [M]{xdot} = {F} for xdot")
+  omega_dot = M.LUsolve(F)
+  # omega_dot = omega_dot.applyfunc(lambda x: x.expand())
+  #print("EOM1: omega_x-dot = ")
+  #sp.pprint(omega_dot[0,0])
+  
+  """ OLD: ways that didn't work very well
+  Mi = M.inv()#print(Mi)
+  # Ran for ~5min w/o finishing
+  omega_dot = M.gauss_jordan_solve(F) # SLOW
+  """
+  
+  if save:
+    printv(1, "Saving to file")
+    with open("EOM.srepr","w") as file:
+      omega_dot_str = sp.srepr(omega_dot)
+      file.write(omega_dot_str)
+    printv(1, "EOM for omega_dot saved to file")
+  
+  return omega_dot
+
+def lambdify_EOM(EOM, ball, save=False):
+  """ Convert the Sympy object EOM to a callable function.
+  Uses numpy as the backend.
+  
+  ball (CMGBall): Object from which physical parameters are taken.
+  """
+
+  printv(1, "Lambdifying EOM")
+
+  # Make the substitutions for everything that's not a state variable
+  consts = {spn.Is: ball.Is, spn.Ig1: ball.Ig1, spn.Ig2: ball.Ig2, 
+    spn.m: ball.m, spn.Rs: ball.Rs, spn.Omega_g: ball.Omega_g}
+  EOM = EOM.subs(consts)
+
+  # Lambdified function EOM for omega-dot
+  # spn.xs: symbolic state vector
+  EOMf = sp.lambdify(spn.xs, EOM, "numpy")
+  
+  if save:
+    # NOTE: The reason I don't just save this is that it changes when you
+    #   change the ball parameters like mass.
+    fname = "EOMf_ball0.dill"
+    with open(fname,"wb") as file:
+      dill.dump(EOMf, file)
+  
+  return EOMf
+
+def load_EOM():
+  """ Load EOM (omega-dot) from EOM.srepr
+  Assumes that file exists
+  """
+  
+  with open("EOM.srepr", "r") as file:
+    EOM_str = file.read()
+    EOM = sp.sympify(EOM_str)
+  return EOM
+
+def full_xdot(EOM=None):
+  """ Full state-space equations. 
+  This parallels CMGBall.eom, but in fully symbolic form
+  """
+  
+  xd = sp.zeros(11,1)
+  
+  # Equations 1-4: Orientation quaternion:
+  # I believe this formula assumes that q is an active rotation
+  #   By that I mean that p_rot__0 = q p_initial__0 q*
+  qdot = sharp(spn.omega_s__0) * spn.q / 2
+  xd[0] = qdot.a
+  xd[1] = qdot.b
+  xd[2] = qdot.c
+  xd[3] = qdot.d
+  
+  # Equations 5-7: omega-dot from EOM.
+  if EOM is None:
+    EOM = load_EOM()
+  xd[4:7,0] = EOM
+  
+  # Equations 8-9: rx, ry
+  # These come from the constraint equation: (-Rk) x Omega
+  xd[7] = spn.Rs*spn.omega_s__0[1]
+  xd[8] = -spn.Rs*spn.omega_s__0[0]
+  
+  # Equations 10-11: alpha, alphad
+  #   Integrate the provided alphadd input
+  #   TODO: Motor dynamics? (currently assuming alphadd = km*u)
+  #     Meh, it's probably too short of a timescale to matter
+  xd[9] = spn.alphad
+  xd[10] = spn.alphadd
+  
+  return xd
+
+def full_J(xdot=None, save=True):
+  """ Find the Jacobian of the full state-space equations
+  """
+  if xdot is None:
+    xdot = full_xdot()
+  
+  J = xdot.jacobian(spn.xs)
+  
+  if save:
+    printv(1, "Saving to file")
+    with open("J.srepr","w") as file:
+      J_str = sp.srepr(J)
+      file.write(J_str)
+    printv(1, "Jacobian of EOM saved to file: J.srepr")
+  
+  return J
+
+def ym_accel(EOM, save=True):
+  """ Accelerometer measurements
+  
+  See ball.measure
+  Repeated here, but symbolic, for finding analytic Jacobian
+  """
+  
+  printv(1, "Creating expression for ym_accel")
+  
+  khat = sp.Matrix([0,0,1])
+  
+  omegad_s__s = EOM
+  
+  # Rotations
+  #   p' = q p q* (normal conjugation)
+  omega_s__0 = flat(spn.q * sharp(spn.omega_s__s) * spn.q.conjugate())
+  omegad_s__0 = flat(spn.q * sharp(omegad_s__s) * spn.q.conjugate())
+  omega_s__a = flat(spn.q_sa * sharp(spn.omega_s__s) * spn.q_sa.conjugate())
+  
+  # Linear acceleration of sphere
+  rdd_x = spn.Rs*omegad_s__0[1]
+  rdd_y = -spn.Rs*omegad_s__0[0]
+  # NOTE: The accelerometer measures gravity as well
+  rdd_s__0 = sp.Matrix([rdd_x, rdd_y, spn.g])
+  # Vector addition for acceleration of accel
+  #   The following are all in the a-frame
+  rdd_s__a = flat(spn.q_sa * spn.q.conjugate() * 
+    sharp(rdd_s__0) * spn.q * spn.q_sa.conjugate())
+  omega_a__a = omega_s__a + spn.alphad*khat
+  # Acceleration of accel relative to sphere. \ddot{r}_{a/s}
+  rdd_ars = omega_a__a.cross(omega_a__a.cross(spn.ra))
+  # Final, total acceleration of accel in a-frame
+  rdd_a = rdd_s__a + rdd_ars
+  
+  rdd_a = rdd_a.applyfunc(lambda x: x.expand())
+  
+  if save:
+    printv(1, "Saving to file")
+    with open("yma.srepr","w") as file:
+      yma_str = sp.srepr(rdd_a)
+      file.write(yma_str)
+    printv(1, "Accelerometer measurement function saved to file: yma.srepr")
+  
+  return rdd_a
+
+# TODO: Find C & D from J(ym)
+
+def load_JAB():
+  """ Load the Jacobian and split into A & B matrices
+  """
+  
+  with open("J.srepr", "r") as file:
+    J_str = file.read()
+    J = sp.sympify(J_str)
+  
+  # Split this into A and B matrices
+  #   {xdot} = [A]@x + [B]@u
+  JA = J[:,0:11]
+  JB = J[:,11]
+  return JA, JB
+
+def lambdify_JAB(JA, JB, ball):
+  printv(1, "Lambdifying Jacobian")
+
+  # Make the substitutions for everything that's not a state variable
+  consts = {spn.Is: ball.Is, spn.Ig1: ball.Ig1, spn.Ig2: ball.Ig2, 
+    spn.m: ball.m, spn.Rs: ball.Rs, spn.Omega_g: ball.Omega_g}
+  JA = JA.subs(consts)
+  JB = JB.subs(consts)
+
+  # Lambdified functions for M and F
+  # spn.xs: symbolic state vector
+  JAf = sp.lambdify(spn.xs, JA, "numpy")
+  JBf = sp.lambdify(spn.xs, JB, "numpy")
+
+  return JAf, JBf
+
+def find_axay(save=True):
   """ Find cartesian acceleration in the world frame.
   rx-dot = Rs*omega_s__0[1,0]
   ry-dot = -Rs*omega_s__0[0,0]
   """
   
   printv(1, "Solving for acceleration")
-  import sp_namespace as spn
   # Differentiate
   ax = sp.diff(spn.rxd__0, spn.t)
   ay = sp.diff(spn.ryd__0, spn.t)
@@ -215,7 +414,6 @@ def load_axay():
 
 def lambdify_axay(ax, ay, ball):
   printv(1, "Lambdifying accelerations")
-  import sp_namespace as spn
 
   # Make the substitutions for everything that's not a state variable
   consts = {spn.Rs: ball.Rs}
@@ -229,9 +427,55 @@ def lambdify_axay(ax, ay, ball):
   return axf, ayf
 
 if __name__ == "__main__":
-  sp.init_printing(use_unicode=False, num_columns=180) 
-  import sp_namespace as spn
-  M, F = load_MF()
+  sp.init_printing(use_unicode=False, num_columns=180)
+  
+  # M, F = load_MF()
+  # EOM = solve_EOM(M=M, F=F)
+  # quit()
+  
+  printv(1, "Loading EOM")
+  EOM = load_EOM()
+  
+  printv(1, "Factoring EOM[0,0]")
+  eEOM = sp.zeros(3,1)
+  # eEOM = EOM.applyfunc(lambda x: x.expand())
+  # eEOM[0,0] = EOM[0,0].collect(spn.xs)
+  eEOM[0,0] = EOM[0,0].factor()
+  printv(1, "Factoring EOM[1,0]")
+  eEOM[1,0] = EOM[1,0].factor()
+  printv(1, "Factoring EOM[2,0]")
+  eEOM[2,0] = EOM[2,0].factor()
+  
+  printv(1, "Converting to srepr")
+  eEOM_str = sp.srepr(eEOM)
+  printv(1, "Saving to file")
+  with open("fEOM.srepr","w") as file:
+    file.write(eEOM_str)
+  printv(1, "fEOM saved to file")
+  
+  
+  # yma = ym_accel(EOM=EOM)
+  quit()
+  
+  
+  # Jacobian Linearization
+  
+  # Build Jacobian for linearization
+  # print("Building full xdot equations")
+  # xdot = full_xdot(EOM=EOM)
+  # print("Calculating Jacobian")
+  # J = full_J(xdot=xdot)
+  # print(f"sp.shape(J): {sp.shape(J)}")
+  # (11,12)
+  
+  JA, JB = load_JAB()
+  print(f"shape of JA, JB: {sp.shape(JA)}, {sp.shape(JB)}")
+  
+  
+  quit()
+  
+  
+  
   
   # Investigate some things about them
   # print(f"M:\n\tSymbols: {M.atoms(sp.Symbol)}")
@@ -255,6 +499,16 @@ if __name__ == "__main__":
       svars_in_F.append(svar)
   print(f"M has: {', '.join(svars_in_M)}")
   print(f"F has: {', '.join(svars_in_F)}")
+  
+  svars_in_EOM = []
+  for svar in dir(spn):
+    var = getattr(spn, svar)
+    if EOM.has(var):
+      svars_in_EOM.append(svar)
+  print(f"EOM has: {', '.join(svars_in_EOM)}")
+  
+  # Now we have omega_dot (3x1) as a function of (Ig1, Ig2, Is, m, Omega_g, Rs, alpha, alphad, alphadd, eta, ex, ey, ez, omega_x, omega_y, omega_z, t)
+  
   
   # Investigate equilibrium
   print("At equilibrium, xd=xdd=0 & M@qdd=0")
@@ -286,39 +540,5 @@ if __name__ == "__main__":
   # There's a clear transform from omega to position (in sphere-fixed frame). Er... that's actually tricky bc the sphere rolls. Well, there's an easy transform from omega to velocity in sphere-fixed frame, so at least instantaneously we can do that.
   # Maybe I can linearize the transform from alpha-dot to omega-dot and do a long, fancy cascade. alpha-dot -> omega-dot -> omega -> v__s -> r_0
   
-  
-  
-  # Jacobian Linearization
-  # First question: can I invert the mass matrix
-  #Mi = M.inv()
-  #print(Mi)
-  # Ran for ~5min w/o finishing
-  # omega_dot = M.gauss_jordan_solve(F) # SLOW
-  omega_dot = M.LUsolve(F)
-  # OH, that solved nicely
-  print(351)
-  omega_dot = omega_dot.applyfunc(lambda x: x.expand())
-  print("EOM1: omega_x-dot = ")
-  sp.pprint(omega_dot[0,0])
-  # print(omega_dot)
-  with open("tmp_omega_dot.srepr","w") as file:
-    omega_dot_str = sp.srepr(omega_dot)
-    file.write(omega_dot_str)
-  
-  
-  svars_in_od = []
-  for svar in dir(spn):
-    var = getattr(spn, svar)
-    if omega_dot.has(var):
-      svars_in_od.append(svar)
-  print(f"omega_dot has: {', '.join(svars_in_M)}")
-  
-  # Now we have omega_dot (3x1) as a function of (Ig1, Ig2, Is, Rs, alpha, eta, ex, ey, ez, m, t)
-  quit()
-  
-  # Build Jacobian for linearization
-  J = sp.Matrix([
-    []
-  ])
   
   

@@ -10,6 +10,10 @@ from sympy.functions.elementary.complexes import conjugate
 from util import sharp, flat, printv
 
 printv(1, "Setting up symbolic variables")
+
+g, rax, ray, raz = sp.symbols("g, rax, ray, raz") # gravity, accel position in a-frame
+ra = sp.Matrix([[rax], [ray], [raz]])
+
 Rs, m, Is, Ig1, Ig2 = sp.symbols("Rs, m, Is, Ig1, Ig2") # Radius, mass, Inertia
 I_s__s = sp.eye(3) * Is
 # w, x, y, z = sp.symbols("w, x, y, z")
@@ -36,6 +40,7 @@ etad = sp.diff(eta,t)
 exd = sp.diff(ex,t)
 eyd = sp.diff(ey,t)
 ezd = sp.diff(ez,t)
+# q: active rotation from 0 to s or passive rotation from s to 0
 q = Quaternion(eta, ex, ey, ez)
 # Angular velocity
 #_s: of sphere; __s: in sphere frame; __0 in global frame
@@ -55,9 +60,14 @@ alphad = sp.diff(alpha, t)
 alphadd = sp.diff(alphad, t)
 omega_g__s = omega_s__s + sp.Matrix([[Omega_g*sp.cos(alpha)], [Omega_g*sp.sin(alpha)], [alphad]])
 omega_g__0 = flat((q * sharp(omega_g__s) * conjugate(q)).expand())
-# Rotate from sphere frame to gyro frame
-q_g__s = Quaternion.from_axis_angle((0,0,1), alpha)
-omega_g__g = flat((q_g__s * sharp(omega_g__s) * conjugate(q_g__s)).expand())
+
+# q_sa: Passive rotation from s to a
+#   from_rotation_vector uses active convention
+q_sa = Quaternion.from_axis_angle((0,0,1), -alpha)
+# OLD: Rotate from sphere frame to gyro frame (active?)
+# q_g__s = Quaternion.from_axis_angle((0,0,1), alpha)
+# NOTE: This is the a-frame, not really the g-frame
+omega_g__g = flat((q_sa * sharp(omega_g__s) * conjugate(q_sa)).expand())
 
 # Symbolic state vector (-s in xs for "symbolic")
 xs = (eta, ex, ey, ez, omega_x, omega_y, omega_z, rx__0, ry__0, alpha, alphad, 

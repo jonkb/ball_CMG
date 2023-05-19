@@ -145,15 +145,20 @@ class FF(Controller):
 class MPC(Controller):
   """ Model Predictive Control
   Simulate ahead by some time window, then choose the optimal next input.
+  
+  TODO: weight the cost by place in window. I.e. prioritize being there at the
+    end and having low velocity at the end.
+    Also maybe penalize high omegas & high u.
   """
   
   name = "MPC controller"
   # MPC options, settable through constructor
-  opt_names = ("N_window", "ftol_opt", "maxit_opt", "v0_penalty")
+  opt_names = ("N_window", "ftol_opt", "maxit_opt", "v0_penalty", "w0_penalty")
   N_window = 4
   ftol_opt = 1e-3 # ftol for MPC optimization
   maxit_opt = 10
   v0_penalty = 0.0
+  w0_penalty = 0.0
   
   def __init__(self, ball, ref, ref_type="v", dt_cnt=0.2, options={}):
     """
@@ -223,8 +228,9 @@ class MPC(Controller):
       #   NOTE: u_w[ t_w<=ti ][-1] returns the most recent control input 
       #   before (or at) ti
       xdot = lambda ti,xi: self.ball.eom(xi, u_w[t_window<=ti][-1])
-      sol = spi.solve_ivp(xdot, [t, t_end], y0=x, #method="RK23",
-        t_eval=t_window, dense_output=False)#, rtol=1e-4, atol=1e-7)
+      sol = spi.solve_ivp(xdot, [t, t_end], y0=x, method="RK23",
+        t_eval=t_window, dense_output=False, rtol=1e-4, atol=1e-7)
+        # TODO: Make these tols parameters
       
       # Calculate the error, depending on what type of reference ref is
       if self.ref_type == "p":
@@ -244,8 +250,14 @@ class MPC(Controller):
       if self.v0_penalty > 0:
         v = np.array([self.ball.x2v(xi) for xi in sol.y.T])
         l2 += self.v0_penalty * np.sum(np.square(v))
+      if self.w0_penalty > 0:
+        w = np.array([xi[4:7] for xi in sol.y.T])
+        l2 += self.w0_penalty * np.sum(np.square(w))
       return l2
     
+    # NOTE: Technically, I could provide an analytical jacobian of cost.
+    #   I think it'll take much longer than FD though, based on how big the
+    #   Jacobian of the EOM is.
     res = spo.minimize(cost, u0, bounds=self.u_bounds, method="L-BFGS-B", 
       tol=self.ftol_opt, options={"maxiter":self.maxit_opt})
     # Save this whole window as a warm start for nexxt
@@ -256,6 +268,19 @@ class MPC(Controller):
       f", nit: {res.nit}")
     return u_opt
 
+class Observer:
+  """ Luenberger observer. To be used by the controllers.
+  Maybe move to a different file?
+  """
+  
+  def __init__(self, ball):
+    self.ball = ball
+    # Settings (TODO: make prms)
+    # desired observer poles
+  
+  def L_gains(self):
+    """ Calculate gains
+    """
 
 
 if False: # OLD MPC - Copied from Simulation

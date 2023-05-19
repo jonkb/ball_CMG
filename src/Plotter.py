@@ -34,7 +34,7 @@ class PlotterX:
     self.fig, self.axs = plt.subplots(3,2, sharex=True)
     # Move & resize
     mngr = plt.get_current_fig_manager()
-    mngr.window.setGeometry(200,100,1000,600)
+    mngr.window.setGeometry(100,100,1100,600)
     # 0,0 - Input alpha acceleration
     # self.axs[0,0].set_title(r"Input gyro acceleration $\ddot{\alpha}$")
     self.axs[0,0].set_title(r"Input gyro pwm $u$")
@@ -50,6 +50,9 @@ class PlotterX:
     # 2,1
     self.axs[2,1].set_xlabel("Time t")
     self.axs[2,1].set_title("Y-Position $ry$")
+    
+    # TODO: Put X&Y together, and put sensor data in the other
+    #   Or add a row if I want more than accel data. Or remove rx & ry
   
   def plot_all(self, t, x, u):
     """ Plot entire data vectors at once (non-interactive)
