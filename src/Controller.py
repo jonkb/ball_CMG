@@ -6,6 +6,7 @@ import scipy.optimize as spo
 import scipy.integrate as spi
 from copy import copy
 import dill
+import control
 
 class Controller:
   """
@@ -278,9 +279,25 @@ class Observer:
     # Settings (TODO: make prms)
     # desired observer poles
   
-  def L_gains(self):
+  def L_gains(self, x, u):
     """ Calculate gains
     """
+    A, B = self.ball.JABf(x, u=u)
+    # print(A!=0)
+    C, D = self.ball.mJCDf(x, u)
+    
+    # Focus on q & omega
+    A = A[0:7, 0:7]
+    B = B[0:7]
+    C = C[:,0:7]
+    # D = D
+    
+    # Observability matrix
+    O = control.ctrb(A.T, C.T)
+    print(289)
+    print(O.shape, np.linalg.matrix_rank(O))
+    #   (7, 21) 5
+    #   (7, 21) 7 -- if u is 0
 
 
 if False: # OLD MPC - Copied from Simulation

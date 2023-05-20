@@ -506,16 +506,22 @@ if __name__ == "__main__":
   x0[0] = 1
   x0[9] = 90 * np.pi/180 # alpha
   x0[10] = 5 * np.pi/180 # alphad
-  u = 0.0 # pwm input for alphadd
+  u = -0.5 # pwm input for alphadd
   alphadd = ball.pwm2aa(u)
+  
+  # Observer testing
+  from Controller import Observer
+  obs = Observer(ball)
+  obs.L_gains(x0, u)
+  quit()
   
   
   ## Speed test
   # Load dynamics equations
   # M, F = dyn.load_MF()
   # Mf, Ff = dyn.lambdify_MF(M, F, ball)
-  timing_test_JAB(ball, x0)
-  quit()
+  # timing_test_JAB(ball, x0)
+  # quit()
   
   
   ## Test differentiation of ball.measure
