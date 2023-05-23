@@ -175,7 +175,7 @@ class CMGBall:
     """
     
     # Redefine measure with augmented xa vector, xa=[x,u]
-    ymf = lambda xa: ball.measure(xa[0:11], xa[11])[0]
+    ymf = lambda xa: self.measure(xa[0:11], xa[11])[0]
     x0a = np.concatenate((x, [u]))
     mJ = FD(ymf, x0a)
     mJC = mJ[:,0:11]
@@ -198,7 +198,7 @@ class CMGBall:
       # Finite differencing of self.eom
       u = self.aa2pwm(u) if (u is None) else u
       # Redefine eom with augmented xa vector, xa=[x,u]
-      eomf = lambda xa: ball.eom(xa[0:11], xa[11])
+      eomf = lambda xa: self.eom(xa[0:11], xa[11])
       x0a = np.concatenate((x, [u]))
       J = FD(eomf, x0a)
       JA = J[:,0:11]
@@ -216,7 +216,8 @@ class CMGBall:
     #   (This is because the omegas are generalized velocities)
     M = self.Mf(*x, alphadd)
     F = self.Ff(*x, alphadd)
-    sol = np.linalg.solve(M, F)
+    # sol = np.linalg.solve(M, F)
+    # return sol[:,0]
     
     # Direct method, using pre-solved symbolic EOM
     #   Ended up 10x slower
@@ -224,10 +225,8 @@ class CMGBall:
     # return omega_dot
     
     # Least-squares solution of [M]{qddot} = {F} 
-    # sol = np.linalg.lstsq(M, F, rcond=None)
-    # return sol[0][:,0]
-    
-    return sol[:,0]
+    sol = np.linalg.lstsq(M, F, rcond=None)
+    return sol[0][:,0]
   
   def eom(self, x, u):
     """ Evaluate state-variable EOM
@@ -493,26 +492,28 @@ if __name__ == "__main__":
   from util import tic, toc
   times = tic()
   # Load a pre-generated ball object
-  fname = "ball_20230518T223742.dill"
-  with open(fname,"rb") as file:
-    sball = dill.load(file)
-    ball = sball.to_ball()
+  # fname = "ball_20230518T223742.dill"
+  # with open(fname,"rb") as file:
+    # sball = dill.load(file)
+    # ball = sball.to_ball()
+  ball = CMGBall(ra=np.array([0.02, 0, 0]))
   
   # ball = CMGBall(ra=np.array([0.1, 0, 0]))
   toc(times, "Initializing CMGBall")
   
   # State: Initial state, but with an alphad
   x0 = np.zeros(11)
-  x0[0] = 1
-  x0[9] = 90 * np.pi/180 # alpha
-  x0[10] = 5 * np.pi/180 # alphad
-  u = -0.5 # pwm input for alphadd
+  x0[0] = 1 # Real part of Q
+  # x0[4] = .1 # Omega-w
+  x0[9] = 0.2 #90 * np.pi/180 # alpha
+  x0[10] = 0.03 #5 * np.pi/180 # alphad
+  u = 0.004 # pwm input for alphadd
   alphadd = ball.pwm2aa(u)
   
   # Observer testing
   from Controller import Observer
-  obs = Observer(ball)
-  obs.L_gains(x0, u)
+  obs = Observer(ball, x0)
+  obs.update_ABCDL(x0, u)
   quit()
   
   

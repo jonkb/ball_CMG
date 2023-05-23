@@ -8,6 +8,8 @@ from copy import copy
 import dill
 import control
 
+from diff import rk4
+
 class Controller:
   """
   Parent class
@@ -274,30 +276,119 @@ class Observer:
   Maybe move to a different file?
   """
   
-  def __init__(self, ball):
+  dt_obs = 0.01
+  nx = 11
+  x_subset = np.array([0,1,2,3,4,5,6,9,10]) # Focus on q, omega, and alpha
+  # x_subset = np.arange(11)
+  L = np.array(
+    [[-1.48935003e+02,  2.15024570e+02,  2.83078408e+02],
+    [-2.79509038e+02,  3.15134982e+01,  1.34352743e+01],
+    [-2.11992117e+01, -2.42459923e+02, -3.39928769e+02],
+    [-1.87419113e+07,  2.43966469e+07,  3.18072327e+07],
+    [ 1.24354449e+02, -6.84203508e+01, -7.89501336e+01],
+    [ 1.87414999e+06, -2.43960849e+06, -3.18065672e+06],
+    [-1.48855456e+06,  3.46727693e+04, -1.14251475e+05],
+    [ 1.34878210e+04, -2.81949997e+02,  1.07943705e+03],
+    [-2.44830787e+01,  4.14537349e+01,  5.42604856e+01]])
+  
+  def __init__(self, ball, x0):
     self.ball = ball
+    # Initialize state estimate
+    self.x_hat = np.copy(x0)
+    self.x_hat = self.x_hat[self.x_subset]
     # Settings (TODO: make prms)
     # desired observer poles
+    zeta_obs1 = 0.8
+    wn_obs1 = 10
+    zeta_obs2 = 0.8
+    wn_obs2 = 11
+    zeta_obs3 = 0.8
+    wn_obs3 = 12
+    zeta_obs4 = 0.8
+    wn_obs4 = 13
+    p_obs5 = -14
+    des_obsv_char_poly = np.convolve(
+      np.convolve(
+        np.convolve(
+          np.convolve(
+            [1, 2*zeta_obs1*wn_obs1, wn_obs1**2],
+            [1, 2*zeta_obs2*wn_obs2, wn_obs2**2]),
+          [1, 2*zeta_obs3*wn_obs3, wn_obs3**2]),
+        [1, 2*zeta_obs4*wn_obs4, wn_obs4**2]),
+      [1, -p_obs5])
+    self.des_obsv_poles = np.roots(des_obsv_char_poly)
   
-  def L_gains(self, x, u):
-    """ Calculate gains
-    """
-    A, B = self.ball.JABf(x, u=u)
-    # print(A!=0)
-    C, D = self.ball.mJCDf(x, u)
+  def update(self, y_m, u):
+    """ Update the state estimation
     
-    # Focus on q & omega
-    A = A[0:7, 0:7]
-    B = B[0:7]
-    C = C[:,0:7]
-    # D = D
+    y_m - measurement
+    u - last control input
+    """
+    # In the future, maybe only update the linearization every once in a while
+    self.update_ABCDL(self.x_hat, u)
+    # Integrate the observer ODE
+    self.x_hat = rk4(self.xhdot, self.x_hat, self.dt_obs, (y_m,u))
+    return self.augment_xhat(self.x_hat)
+  
+  def augment_xhat(self, x_hat):
+    """ Convert a subset x-vector x_hat to a full state vector
+    """
+    full_x = np.zeros(self.nx)
+    full_x[self.x_subset] = x_hat
+    return full_x
+  
+  def update_ABCDL(self, x, u):
+    """ Calculate ABCD matrices @ observer gains L
+    
+    Assumes that x is an xhat, defining self.x_subset indices of the full
+      state vector
+    """
+    
+    # Augment the given xhat vector so it's the right size
+    if x.size < self.nx:
+      full_x = self.augment_xhat(x)
+    else:
+      full_x = x
+    
+    A, B = self.ball.JABf(full_x, u=u)
+    # print(A!=0)
+    C, D = self.ball.mJCDf(full_x, u)
+    
+    # Focus on q, omega, and alpha
+    self.A = A[np.ix_(self.x_subset, self.x_subset)]
+    self.B = B[self.x_subset]
+    self.C = C[:,self.x_subset]
+    self.D = D
+    # print(self.A.shape, self.B.shape, self.C.shape, self.D.shape)
+    #   (9, 9) (9,) (3, 9) (3,)
     
     # Observability matrix
-    O = control.ctrb(A.T, C.T)
-    print(289)
-    print(O.shape, np.linalg.matrix_rank(O))
-    #   (7, 21) 5
-    #   (7, 21) 7 -- if u is 0
+    O = control.ctrb(self.A.T, self.C.T)
+    # print(O.shape, np.linalg.matrix_rank(O))
+    #   (9, 27) 9
+    #   (9, 27) 7 -- if u is 0
+    
+    if np.linalg.matrix_rank(O) == self.x_subset.size:
+      # System is observable. Calculate observer gains.
+      self.L = control.place(self.A.T, self.C.T, self.des_obsv_poles).T
+      print(309, f"New L={self.L}")
+    else:
+      # System is not currently observable
+      print(312, "System is not observable in the current configuration:"
+        f"\n\tx={x}, u={u}"
+        f"\n\trank(O)={np.linalg.matrix_rank(O)} / {self.x_subset.size}")
+      print(314, "Gains are being left as follows:"
+        f"\n\tL={self.L}")
+  
+  def xhdot(self, x_hat, y_m, u):
+    # xhatdot = A*xhat + B*u + L(y - C*xhat - D*u)
+    #   Note: y_pred = C*xhat - D*u
+    #   Note: B*u needs to change to B@u if u becomes an array
+    
+    xhat_dot = self.A @ x_hat \
+      + self.B * u \
+      + self.L @ (y_m - self.C @ x_hat - self.D * u)
+    return xhat_dot
 
 
 if False: # OLD MPC - Copied from Simulation

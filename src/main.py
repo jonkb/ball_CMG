@@ -51,7 +51,7 @@ def FF_test(tag):
   # v_des = np.array([.2,.1])
   # ref = lambda t: v_des
   ref = lambda t: (1-np.exp(-4*t))*np.array([2.0,0.5])
-  ball = CMGBall()
+  ball = CMGBall(ra=np.array([0.02, 0, 0]))
   
   cnt = FF(ball, ref, ref_type="p")
   sim = Simulation(cnt, t_max=5.0)
@@ -157,9 +157,9 @@ if __name__ == "__main__":
   
   # Run a new simulation
   # sim = simple_test()
-  # sim = FF_test("0519_0")
+  sim = FF_test("0522_0")
   # sim = dt_test()
-  sim = MPC_test("0519_1")
+  # sim = MPC_test("0519_1")
   
   toc(times, "Simulation")
   

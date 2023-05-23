@@ -19,6 +19,8 @@ import scipy.integrate as spi
 # from scipy.misc import derivative as spd
 import dill
 from Plotter import PlotterX, AnimatorXR, plot_anim, plot_tym
+from diff import rk4
+from Controller import Observer
 
 class Simulation:
   status = "unsolved"
@@ -45,6 +47,9 @@ class Simulation:
       x0 = np.zeros(11)
       x0[0] = 1 # Real part of quaternion starts at 1
     self.x0 = x0
+    
+    # Initialize observer
+    self.obs = Observer(cnt.ball, x0)
   
   def __str__(self):
     s = "Simulation Object\n"
@@ -82,31 +87,41 @@ class Simulation:
     if plotting:
       plotter = PlotterX(x0=self.x0)
       animator = AnimatorXR(ref=self.cnt.ref, ref_type=self.cnt.ref_type)
+    t_next_obs = v_t[0]
     t_next_cnt = v_t[0]
     t_next_plt = v_t[0]
-    u = 0 # Current control input NOTE: May be vector later
+    u = 0.0001 #0 # Current control input NOTE: May be vector later
     x = np.copy(self.x0)
     # Store everything
     v_x = np.empty((v_t.size, self.ball.n_x))
     v_u = np.empty((v_t.size, self.ball.n_u))
     v_ym = np.empty((v_t.size, self.ball.n_ym))
+    v_xhat = np.empty((v_t.size, self.ball.n_x))
     
     ## Simulation loop
     for i,t in enumerate(v_t):
-      if t >= t_next_cnt:
-        # Update control
-        u = self.cnt.update(t, x) # NOTE: Later, pass ym, not x
-        # Don't update control again until dt_cnt time has passed
-        t_next_cnt += self.cnt.dt_cnt
-      
       # Update dynamics
-      x = self.rk4(self.ball.eom, x, u, self.dt_dyn)
+      x = rk4(self.ball.eom, x, self.dt_dyn, (u,))
       # Record simulated measurement data
       ym = self.ball.measure(x, u)[0]
       # Store state, input, and measurement at every timestep
       v_x[i] = x
       v_u[i] = u
       v_ym[i] = ym
+      
+      if t >= t_next_obs:
+        # Update observer
+        x_hat = self.obs.update(ym, u)
+        v_xhat[i] = x_hat
+        # Don't update observer again until dt_obs time has passed
+        t_next_obs += self.obs.dt_obs
+      
+      if t >= t_next_cnt:
+        # Update control
+        # TEMP: CHEAT
+        u = self.cnt.update(t, x)#x_hat)
+        # Don't update control again until dt_cnt time has passed
+        t_next_cnt += self.cnt.dt_cnt
       
       if plotting and (t >= t_next_plt):
         # Update plots & animation TODO
@@ -236,17 +251,6 @@ class Simulation:
       sim2.status = "unsolved"
       sim2.sol = None
     return sim2
-  
-  @staticmethod
-  def rk4(f, x, u, dt):
-    """ 4th order Runge-Kutta integration step
-    Returns x(t+dt)
-    """
-    F1 = f(x, u)
-    F2 = f(x + dt / 2 * F1, u)
-    F3 = f(x + dt / 2 * F2, u)
-    F4 = f(x + dt * F3, u)
-    return x + dt / 6 * (F1 + 2 * F2 + 2 * F3 + F4)
   
   @staticmethod
   def load(fname="sim.dill"):
