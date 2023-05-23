@@ -30,7 +30,7 @@ class Simulation:
   # dt_dyn must be the smallest time interval.
   #   For best performance, the other 'dt's should be integer multiples 
   #   of dt_dyn.
-  dt_dyn = 0.001
+  dt_dyn = 0.0005
   dt_plt = 0.05
   
   def __init__(self, cnt, t_max=1, x0=None):
@@ -90,7 +90,7 @@ class Simulation:
     t_next_obs = v_t[0]
     t_next_cnt = v_t[0]
     t_next_plt = v_t[0]
-    u = 0.0001 #0 # Current control input NOTE: May be vector later
+    u = 0.0 # Current control input NOTE: May be vector later
     x = np.copy(self.x0)
     # Store everything
     v_x = np.empty((v_t.size, self.ball.n_x))

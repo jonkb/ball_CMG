@@ -17,7 +17,7 @@ class CMGBall:
   # Constants
   n_x = 11 # Length of state vector
   n_u = 1 # Number of inputs. Currently only n_u=1 is supported
-  n_ym = 6 # Number of measurements.
+  n_ym = 9 # Number of measurements.
   g = 9.8 # Gravity
   
   def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
@@ -276,7 +276,7 @@ class CMGBall:
     
     return xd
   
-  def measure(self, x, u, xd=None, sensors=["accel", "gyro"]):#, "mag"]):
+  def measure(self, x, u, xd=None, sensors=["accel", "gyro", "mag"]):
     """ Simulate a sensor measurement at the given state
     
     Accelerometer
@@ -330,11 +330,23 @@ class CMGBall:
         rdd_a = rdd_s__a + rdd_ars
         
         outputs.append(rdd_a)
-        
+      
       if sensor == "gyro":
         # TODO: Simulate drift and noise
         omega_s__s = x[4:7]
         outputs.append(omega_s__s)
+      
+      if sensor == "mag":
+        # Rotations
+        q_s0 = np.quaternion(x[0], x[1], x[2], x[3])
+        alpha = x[9]
+        q_sa = quaternion.from_rotation_vector([0,0,-alpha])
+        # North is the +y-axis in the global frame
+        north__0 = np.array([0,1,0])
+        # Convert to the a-frame
+        north__a = flatn(q_sa * q_s0.conjugate() * 
+          sharpn(north__0) * q_s0 * q_sa.conjugate())
+        outputs.append(north__a)
     
     # Return all sensor data as a single (n_ym,) array
     ym = np.concatenate(outputs)
@@ -511,15 +523,16 @@ if __name__ == "__main__":
   
   # State: Initial state, but with an alphad
   x0 = np.zeros(11)
-  q = quaternion.from_rotation_vector([.001,.002,.003])
+  # q = quaternion.from_rotation_vector([.001,.002,.003])
+  q = quaternion.from_rotation_vector([0,0,0])
   # x0[0] = 1 # Real part of Q
   x0[0:4] = [q.w, q.x, q.y, q.z]
-  x0[4] = 0.01 # Omega-x
-  x0[5] = 0.02 # Omega-y
-  x0[6] = 0.03 # Omega-z
+  x0[4] = 0.0 # Omega-x
+  x0[5] = 0.0 # Omega-y
+  x0[6] = 0.0 # Omega-z
   x0[9] = 0.01 #90 * np.pi/180 # alpha
-  x0[10] = 0.02 #5 * np.pi/180 # alphad
-  u = 0.01 # pwm input for alphadd
+  x0[10] = 0.01 #5 * np.pi/180 # alphad
+  u = 0.0 # pwm input for alphadd
   alphadd = ball.pwm2aa(u)
   
   # Observer testing

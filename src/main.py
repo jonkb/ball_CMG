@@ -54,7 +54,13 @@ def FF_test(tag):
   ball = CMGBall(ra=np.array([0.02, 0, 0]))
   
   cnt = FF(ball, ref, ref_type="p")
-  sim = Simulation(cnt, t_max=5.0)
+  
+  x0 = np.zeros(11)
+  x0[0] = 1 # Real part of quaternion starts at 1
+  x0[9] = 0.01 # Start with some alpha
+  x0[10] = 0.01
+  
+  sim = Simulation(cnt, t_max=5.0, x0=x0)
   fname=f"FF_test{tag}.dill"
   # sim.run(fname)
   sim.run_dt(plotting=True, fname=fname)

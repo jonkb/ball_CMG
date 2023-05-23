@@ -71,6 +71,20 @@ def flatn(q):
   # Shortcut for flat(q, use_np=True)
   return flat(q, use_np=True)
 
+def cleanup_versor(q):
+  """
+  Force a quaternion to be a valid versor to counter numerical drift
+    Uses numpy
+  A versor must have norm 1
+  """
+  return q / qnorm(q)
+
+def qnorm(q):
+  """ It seems like q.norm is broken... or at least doesn't work like I 
+    expected
+  """
+  return np.linalg.norm([q.w, q.x, q.y, q.z])
+
 def printv(vlvl, *msgs):
   """ Simple print wrapper
   Prints if verbosity >= vlvl
