@@ -138,7 +138,7 @@ class FF(Controller):
     # if abs( (t*100) % 1 ) < 0.01:
     # if np.random.rand() < 0.01:
     # Display how close we got
-    print(f"t: {t}, error: {res.fun}, nfev: {res.nfev}, res.x: {res.x}")
+    print(f"FF141 t: {t}, error: {res.fun}, nfev: {res.nfev}, res.x: {res.x}")
     err(res.x, disp=True)
     
     #Return the optimized input
@@ -276,20 +276,29 @@ class Observer:
   Maybe move to a different file?
   """
   
-  dt_obs = 0.01
+  dt_obs = 0.002
   nx = 11
   x_subset = np.array([0,1,2,3,4,5,6,9,10]) # Focus on q, omega, and alpha
   # x_subset = np.arange(11)
   L = np.array(
-    [[-1.48935003e+02,  2.15024570e+02,  2.83078408e+02],
-    [-2.79509038e+02,  3.15134982e+01,  1.34352743e+01],
-    [-2.11992117e+01, -2.42459923e+02, -3.39928769e+02],
-    [-1.87419113e+07,  2.43966469e+07,  3.18072327e+07],
-    [ 1.24354449e+02, -6.84203508e+01, -7.89501336e+01],
-    [ 1.87414999e+06, -2.43960849e+06, -3.18065672e+06],
-    [-1.48855456e+06,  3.46727693e+04, -1.14251475e+05],
-    [ 1.34878210e+04, -2.81949997e+02,  1.07943705e+03],
-    [-2.44830787e+01,  4.14537349e+01,  5.42604856e+01]])
+    [[ 2.08581619e-01,  3.25332381e-01,  1.04830218e+00,
+      -7.51104521e-01, -2.68892153e-02,  3.93121902e+00],
+     [-4.55525293e-02,  7.39482649e-01,  4.16344479e-01,
+       2.63880237e-02, -1.30852247e-02, -4.96868985e+00],
+     [-6.45903485e-01, -2.19159059e-01, -8.29423331e-02,
+       1.97942228e-01,  9.36057171e-01,  1.87626693e+00],
+     [-6.51365147e+01, -1.47767684e+02, -2.23864715e+02,
+       2.08881632e+02,  1.17981965e+01,  1.61193885e+00],
+     [-2.89710229e-02,  3.02070010e-03, -6.99986728e-03,
+       1.75054195e+01, -6.75610457e-02, -1.14566919e-01],
+     [ 1.96415375e+00, -2.39085142e-01, -3.61740022e-02,
+       1.33178518e-01,  2.08087756e+01, -1.79121443e-01],
+     [-6.39370039e-02, -5.50753186e-02, -1.68996599e-01,
+       1.15412778e-01,  1.44418049e-02,  1.05188731e+01],
+     [-3.44386409e-02, -3.90842922e-02, -6.28040998e-02,
+       4.49113168e+01,  2.80117472e-01, -4.76676572e-02],
+     [-1.92612183e-01, -1.67201384e-02,  6.37562086e-02,
+      -7.90091713e-03, -1.26923344e+00,  6.70593509e-01]])
   
   def __init__(self, ball, x0):
     self.ball = ball
@@ -371,19 +380,23 @@ class Observer:
     if np.linalg.matrix_rank(O) == self.x_subset.size:
       # System is observable. Calculate observer gains.
       self.L = control.place(self.A.T, self.C.T, self.des_obsv_poles).T
-      print(309, f"New L={self.L}")
+      # print(309, f"New L={np.array_repr(self.L)}")
+      print(309, f"Calculated new L. rank(O)={self.x_subset.size}")
     else:
       # System is not currently observable
       print(312, "System is not observable in the current configuration:"
         f"\n\tx={x}, u={u}"
         f"\n\trank(O)={np.linalg.matrix_rank(O)} / {self.x_subset.size}")
-      print(314, "Gains are being left as follows:"
-        f"\n\tL={self.L}")
+      # print(314, "Gains are being left as follows:"
+        # f"\n\tL={self.L}")
   
   def xhdot(self, x_hat, y_m, u):
     # xhatdot = A*xhat + B*u + L(y - C*xhat - D*u)
     #   Note: y_pred = C*xhat - D*u
     #   Note: B*u needs to change to B@u if u becomes an array
+    
+    # print(388, self.L.shape, self.A.shape, self.B.shape, self.C.shape, self.D.shape)
+    # print(389, x_hat.shape, u, y_m.shape)
     
     xhat_dot = self.A @ x_hat \
       + self.B * u \

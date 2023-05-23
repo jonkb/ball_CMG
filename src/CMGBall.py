@@ -17,7 +17,7 @@ class CMGBall:
   # Constants
   n_x = 11 # Length of state vector
   n_u = 1 # Number of inputs. Currently only n_u=1 is supported
-  n_ym = 3 # Number of measurements.
+  n_ym = 6 # Number of measurements.
   g = 9.8 # Gravity
   
   def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
@@ -175,7 +175,7 @@ class CMGBall:
     """
     
     # Redefine measure with augmented xa vector, xa=[x,u]
-    ymf = lambda xa: self.measure(xa[0:11], xa[11])[0]
+    ymf = lambda xa: self.measure(xa[0:11], xa[11])
     x0a = np.concatenate((x, [u]))
     mJ = FD(ymf, x0a)
     mJC = mJ[:,0:11]
@@ -276,7 +276,7 @@ class CMGBall:
     
     return xd
   
-  def measure(self, x, u, xd=None, sensors=["accel"]):
+  def measure(self, x, u, xd=None, sensors=["accel", "gyro"]):#, "mag"]):
     """ Simulate a sensor measurement at the given state
     
     Accelerometer
@@ -288,50 +288,58 @@ class CMGBall:
     
     outputs = []
     
-    # Constants
-    khat = np.array([0,0,1])
-    Rs = self.Rs
-    
-    if xd is None:
-      # Acceleration measurements depend on x-dot
-      xd = self.eom(x, u)
-    
-    # Extract info from x & xd
-    # q: active rotation from 0 to s or passive rotation from s to 0
-    q_s0 = np.quaternion(x[0], x[1], x[2], x[3])
-    omega_s__s = x[4:7]
-    omegad_s__s = xd[4:7]
-    alpha = x[9]
-    alphad = x[10]
-    
-    # Rotations
-    #   p' = q p q* (normal conjugation)
-    omega_s__0 = flatn(q_s0 * sharpn(omega_s__s) * q_s0.conjugate())
-    omegad_s__0 = flatn(q_s0 * sharpn(omegad_s__s) * q_s0.conjugate())
-    # q_sa: Passive rotation from s to a
-    #   from_rotation_vector uses active convention
-    q_sa = quaternion.from_rotation_vector([0,0,-alpha])
-    omega_s__a = flatn(q_sa * sharpn(omega_s__s) * q_sa.conjugate())
-    
-    # Linear acceleration of sphere
-    rdd_x = Rs*omegad_s__0[1]
-    rdd_y = -Rs*omegad_s__0[0]
-    # NOTE: The accelerometer measures gravity as well
-    rdd_s__0 = np.array([rdd_x, rdd_y, self.g])
-    # Vector addition for acceleration of accel
-    #   The following are all in the a-frame
-    rdd_s__a = flatn(q_sa * q_s0.conjugate() * 
-      sharpn(rdd_s__0) * q_s0 * q_sa.conjugate())
-    omega_a__a = omega_s__a + alphad*khat
-    # Acceleration of accel relative to sphere. \ddot{r}_{a/s}
-    rdd_ars = np.cross(omega_a__a, np.cross(omega_a__a, self.ra))
-    rdd_a = rdd_s__a + rdd_ars
-    
     for sensor in sensors:
       if sensor == "accel":
+        # Constants
+        khat = np.array([0,0,1])
+        Rs = self.Rs
+        
+        if xd is None:
+          # Acceleration measurements depend on x-dot
+          xd = self.eom(x, u)
+        
+        # Extract info from x & xd
+        # q: active rotation from 0 to s or passive rotation from s to 0
+        q_s0 = np.quaternion(x[0], x[1], x[2], x[3])
+        omega_s__s = x[4:7]
+        omegad_s__s = xd[4:7]
+        alpha = x[9]
+        alphad = x[10]
+        
+        # Rotations
+        #   p' = q p q* (normal conjugation)
+        omega_s__0 = flatn(q_s0 * sharpn(omega_s__s) * q_s0.conjugate())
+        omegad_s__0 = flatn(q_s0 * sharpn(omegad_s__s) * q_s0.conjugate())
+        # q_sa: Passive rotation from s to a
+        #   from_rotation_vector uses active convention
+        q_sa = quaternion.from_rotation_vector([0,0,-alpha])
+        omega_s__a = flatn(q_sa * sharpn(omega_s__s) * q_sa.conjugate())
+        
+        # Linear acceleration of sphere
+        rdd_x = Rs*omegad_s__0[1]
+        rdd_y = -Rs*omegad_s__0[0]
+        # NOTE: The accelerometer measures gravity as well
+        rdd_s__0 = np.array([rdd_x, rdd_y, self.g])
+        # Vector addition for acceleration of accel
+        #   The following are all in the a-frame
+        rdd_s__a = flatn(q_sa * q_s0.conjugate() * 
+          sharpn(rdd_s__0) * q_s0 * q_sa.conjugate())
+        omega_a__a = omega_s__a + alphad*khat
+        # Acceleration of accel relative to sphere. \ddot{r}_{a/s}
+        rdd_ars = np.cross(omega_a__a, np.cross(omega_a__a, self.ra))
+        rdd_a = rdd_s__a + rdd_ars
+        
         outputs.append(rdd_a)
+        
+      if sensor == "gyro":
+        # TODO: Simulate drift and noise
+        omega_s__s = x[4:7]
+        outputs.append(omega_s__s)
     
-    return outputs
+    # Return all sensor data as a single (n_ym,) array
+    ym = np.concatenate(outputs)
+    assert ym.size == self.n_ym, "Inconsistent n_ym"
+    return ym
 
 class SerializableBall:
   def __init__(self, ball):
@@ -503,11 +511,15 @@ if __name__ == "__main__":
   
   # State: Initial state, but with an alphad
   x0 = np.zeros(11)
-  x0[0] = 1 # Real part of Q
-  # x0[4] = .1 # Omega-w
-  x0[9] = 0.2 #90 * np.pi/180 # alpha
-  x0[10] = 0.03 #5 * np.pi/180 # alphad
-  u = 0.004 # pwm input for alphadd
+  q = quaternion.from_rotation_vector([.001,.002,.003])
+  # x0[0] = 1 # Real part of Q
+  x0[0:4] = [q.w, q.x, q.y, q.z]
+  x0[4] = 0.01 # Omega-x
+  x0[5] = 0.02 # Omega-y
+  x0[6] = 0.03 # Omega-z
+  x0[9] = 0.01 #90 * np.pi/180 # alpha
+  x0[10] = 0.02 #5 * np.pi/180 # alphad
+  u = 0.01 # pwm input for alphadd
   alphadd = ball.pwm2aa(u)
   
   # Observer testing
@@ -535,7 +547,7 @@ if __name__ == "__main__":
   # print("y_mi: ", y_mi)
   from diff import FD
   # Redefine measure with augmented xa vector, xa=[x,u]
-  mf = lambda xa: ball.measure(xa[0:11], xa[11])[0]
+  mf = lambda xa: ball.measure(xa[0:11], xa[11])
   x0a = np.concatenate((x0, [u]))
   print(x0a.shape)
   mJ = FD(mf, x0a)

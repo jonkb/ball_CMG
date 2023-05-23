@@ -30,7 +30,7 @@ class Simulation:
   # dt_dyn must be the smallest time interval.
   #   For best performance, the other 'dt's should be integer multiples 
   #   of dt_dyn.
-  dt_dyn = 0.0025
+  dt_dyn = 0.001
   dt_plt = 0.05
   
   def __init__(self, cnt, t_max=1, x0=None):
@@ -103,7 +103,7 @@ class Simulation:
       # Update dynamics
       x = rk4(self.ball.eom, x, self.dt_dyn, (u,))
       # Record simulated measurement data
-      ym = self.ball.measure(x, u)[0]
+      ym = self.ball.measure(x, u)
       # Store state, input, and measurement at every timestep
       v_x[i] = x
       v_u[i] = u
@@ -122,6 +122,8 @@ class Simulation:
         u = self.cnt.update(t, x)#x_hat)
         # Don't update control again until dt_cnt time has passed
         t_next_cnt += self.cnt.dt_cnt
+      
+      print(126, x[0:4], x_hat[0:4], np.sum(np.square(x-x_hat)))
       
       if plotting and (t >= t_next_plt):
         # Update plots & animation TODO
@@ -269,7 +271,7 @@ class Simulation:
     t, x, u, ym = self.xeval(t=t_eval)
     
     if ym is None:
-      ym = [self.cnt.ball.measure(xi, ui)[0] for (xi, ui) 
+      ym = [self.cnt.ball.measure(xi, ui) for (xi, ui) 
         in zip(x, u)] # NOTE: x.T ?
 
     # Plot state vector as a function of time
