@@ -31,7 +31,7 @@ class Simulation:
   #   For best performance, the other 'dt's should be integer multiples 
   #   of dt_dyn.
   dt_dyn = 0.0005
-  dt_plt = 0.05
+  dt_plt = 0.01
   
   def __init__(self, cnt, t_max=1, x0=None):
     """
@@ -104,17 +104,18 @@ class Simulation:
       x = rk4(self.ball.eom, x, self.dt_dyn, (u,))
       # Record simulated measurement data
       ym = self.ball.measure(x, u)
-      # Store state, input, and measurement at every timestep
-      v_x[i] = x
-      v_u[i] = u
-      v_ym[i] = ym
       
       if t >= t_next_obs:
         # Update observer
         x_hat = self.obs.update(ym, u)
-        v_xhat[i] = x_hat
         # Don't update observer again until dt_obs time has passed
         t_next_obs += self.obs.dt_obs
+      
+      # Store state, input, and measurement at every timestep
+      v_x[i] = x
+      v_u[i] = u
+      v_ym[i] = ym
+      v_xhat[i] = x_hat
       
       if t >= t_next_cnt:
         # Update control
@@ -123,11 +124,13 @@ class Simulation:
         # Don't update control again until dt_cnt time has passed
         t_next_cnt += self.cnt.dt_cnt
       
-      print(126, x[0:4], x_hat[0:4], np.sum(np.square(x-x_hat)))
+      # print(126, x[0:4], x_hat[0:4], np.sum(np.square(x[0:4] - x_hat[0:4])))
+      # print(127, x[4:7], x_hat[4:7], np.sum(np.square(x[4:7] - x_hat[4:7])))
+      # print(128, x[9:11], x_hat[9:11], np.sum(np.square(x[9:11] - x_hat[9:11])))
       
       if plotting and (t >= t_next_plt):
-        # Update plots & animation TODO
-        plotter.update_interactive(v_t[0:i+1], v_x[0:i+1], v_u[0:i+1])
+        plotter.update_interactive(v_t[0:i+1], v_x[0:i+1], v_u[0:i+1], 
+          v_xhat=v_xhat[0:i+1])
         animator.update(v_t[0:i+1], v_x[0:i+1])
         # Don't update plots again until dt_plt time has passed
         t_next_plt += self.dt_plt

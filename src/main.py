@@ -60,7 +60,7 @@ def FF_test(tag):
   x0[9] = 0.01 # Start with some alpha
   x0[10] = 0.01
   
-  sim = Simulation(cnt, t_max=5.0, x0=x0)
+  sim = Simulation(cnt, t_max=.1, x0=x0)
   fname=f"FF_test{tag}.dill"
   # sim.run(fname)
   sim.run_dt(plotting=True, fname=fname)
@@ -72,8 +72,13 @@ def MPC_test(tag, ball=None):
   if ball is None:
     ball = CMGBall()
   
+  x0 = np.zeros(11)
+  x0[0] = 1 # Real part of quaternion starts at 1
+  # x0[9] = 0.01 # Start with some alpha
+  x0[10] = 0.01
+  
   MPCprms = {
-    "N_window": 7,
+    "N_window": 5,
     "ftol_opt": 0.01,
     "maxit_opt": 4,
     "v0_penalty": 0.0,
@@ -81,7 +86,7 @@ def MPC_test(tag, ball=None):
   }
   cnt = MPC(ball, p_ref, ref_type="p", dt_cnt=0.30, 
     options=MPCprms)
-  sim = Simulation(cnt, t_max=4.0)
+  sim = Simulation(cnt, t_max=0.1, x0=x0)
   fname = f"MPC_{tag}.dill"
   sim.run_dt(plotting=True, fname=fname)
   return sim
@@ -163,9 +168,9 @@ if __name__ == "__main__":
   
   # Run a new simulation
   # sim = simple_test()
-  sim = FF_test("0522_0")
+  # sim = FF_test("0524_1")
   # sim = dt_test()
-  # sim = MPC_test("0519_1")
+  sim = MPC_test("0524_0")
   
   toc(times, "Simulation")
   

@@ -281,7 +281,10 @@ class Observer:
   dt_obs = 0.001
   nx = 11
   x_subset = np.array([0,1,2,3,4,5,6,9,10]) # Focus on q, omega, and alpha
+  # x_subset = np.array([0,1,2,3,4,5,6]) # Not estimating alpha
   # x_subset = np.arange(11)
+  # Limits on quantities in xhat
+  xhat_max = np.array([1.,1.,1.,1., 15.,15.,15., np.inf,12.])
   L = np.array(
     [[ 1.18993274e-15,  1.54015810e-06,  2.26394918e-06,
       -4.52789720e-10, -6.94786078e-16,  9.60169444e-16,
@@ -366,13 +369,25 @@ class Observer:
     # In the future, maybe only update the linearization every once in a while
     self.update_ABCDL(self.x_hat, u)
     # Integrate the observer ODE
-    self.x_hat = rk4(self.xhdot, self.x_hat, self.dt_obs, (y_m,u))
+    raw_x_hat = rk4(self.xhdot, self.x_hat, self.dt_obs, (y_m,u))
+    self.x_hat = self.cleanup_xhat(raw_x_hat)
+    # print(374, self.x_hat, self.xhat_max)
+    return self.augment_xhat(self.x_hat)
+  
+  def cleanup_xhat(self, raw_x_hat):
+    """ Take a raw x_hat vector and clean it up to counter numerical drift.
+    
+    Does not augment
+    """
+    
+    x_hat = np.copy(raw_x_hat)
     # Normalize the versor to counter numerical drift
     q = np.quaternion(*self.x_hat[0:4])
     q = cleanup_versor(q)
-    # print(373, q)
-    self.x_hat[0:4] = [q.w, q.x, q.y, q.z]
-    return self.augment_xhat(self.x_hat)
+    x_hat[0:4] = [q.w, q.x, q.y, q.z]
+    # Enforce limits
+    x_hat = np.maximum(np.minimum(x_hat, self.xhat_max), -self.xhat_max)
+    return x_hat
   
   def augment_xhat(self, x_hat):
     """ Convert a subset x-vector x_hat to a full state vector
@@ -412,11 +427,14 @@ class Observer:
     #   (9, 27) 9
     #   (9, 27) 7 -- if u is 0
     
+    # TEMP: For testing
+    # return np.linalg.matrix_rank(O)
+    
     if np.linalg.matrix_rank(O) == self.x_subset.size:
       # System is observable. Calculate observer gains.
       self.L = control.place(self.A.T, self.C.T, self.des_obsv_poles).T
       # print(309, f"New L={np.array_repr(self.L)}")
-      print(309, f"Calculated new L. rank(O)={self.x_subset.size}")
+      # print(309, f"Calculated new L. rank(O)={self.x_subset.size}")
     else:
       # System is not currently observable
       print(312, "System is not observable in the current configuration:"
@@ -548,9 +566,54 @@ if False: # OLD MPC - Copied from Simulation
     
     return self.alphadd_v(0, v)
 
+def obsv_test(ball):
+  # Observability test: How often is it observable?
+  
+  N = 1000
+  span = np.array([1, 1, 1, 1, 30, 30, 30, 0, 0, 100, 12])
+  x0_rand = np.random.rand(N, 11)*span-span/2
+  # Cleanup Q
+  for i, x0i in enumerate(x0_rand):
+    q = quaternion.from_rotation_vector(x0i[0:3])
+    x0_rand[i,0:4] = [q.w, q.x, q.y, q.z]
+  u_rand = np.random.rand(N)*2-1
+  
+  successses = 0
+  failures = 0
+  
+  for x0, u in zip(x0_rand, u_rand):
+    obs = Observer(ball, x0)
+    rnk = obs.update_ABCDL(x0, u)
+    if rnk == 9:
+      successses += 1
+    else:
+      failures += 1
+  
+  print(f"successes: {successses}/{N}; failures: {failures}/{N}")
 
 if __name__ == "__main__":
   from CMGBall import CMGBall
-  ball = CMGBall()
-  v_ref = lambda t: np.array([2,1]) * np.cos(t)
-  cnt = FF(ball, v_ref)
+  ball = CMGBall(ra=np.array([0.02, 0, 0]))
+  # v_ref = lambda t: np.array([2,1]) * np.cos(t)
+  # cnt = FF(ball, v_ref)
+  
+  obsv_test(ball)
+  quit()
+  
+  
+  # State: Initial state, but with an alphad
+  x0 = np.zeros(11)
+  # q = quaternion.from_rotation_vector([.001,.002,.003])
+  q = quaternion.from_rotation_vector([0,0,0])
+  # x0[0] = 1 # Real part of Q
+  x0[0:4] = [q.w, q.x, q.y, q.z]
+  x0[4] = 0.0 # Omega-x
+  x0[5] = 0.0 # Omega-y
+  x0[6] = 0.0 # Omega-z
+  x0[9] = 0.0 #90 * np.pi/180 # alpha
+  x0[10] = 0.0 #5 * np.pi/180 # alphad
+  u = 0.01 # pwm input for alphadd
+  alphadd = ball.pwm2aa(u)
+  
+  obs = Observer(ball, x0)
+  obs.update_ABCDL(x0, u)

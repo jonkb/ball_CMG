@@ -1,6 +1,8 @@
 """ Plotter classes with methods for plotting
 
-TODO: Sensor Plotter, Animation
+TODO: Sensor Plotter
+
+TODO: xhat (observer)
 """
 
 import numpy as np
@@ -13,7 +15,9 @@ class PlotterX:
   Can be used interactively or plotted all at once
   """
   
-  def __init__(self, interactive=True, t0=0, x0=None, u0=0):
+  def __init__(self, interactive=True, obs=True, t0=0, x0=None, u0=0):
+    
+    self.obs = obs
     
     self.setup_fig()
     
@@ -46,10 +50,11 @@ class PlotterX:
     self.axs[1,1].set_title("Angular Velocity $\omega$")
     # 2,0
     self.axs[2,0].set_xlabel("Time t")
-    self.axs[2,0].set_title("X-Position $r_x$")
+    # self.axs[2,0].set_title("X-Position $r_x$")
+    self.axs[2,0].set_title("Position $r_x$, $r_y$")
     # 2,1
-    self.axs[2,1].set_xlabel("Time t")
-    self.axs[2,1].set_title("Y-Position $ry$")
+    # self.axs[2,1].set_xlabel("Time t")
+    # self.axs[2,1].set_title("Y-Position $r_y$")
     
     # TODO: Put X&Y together, and put sensor data in the other
     #   Or add a row if I want more than accel data. Or remove rx & ry
@@ -90,35 +95,85 @@ class PlotterX:
     self.handles = {}
     
     # alphadd / u
-    self.handles["alphadd"] = self.axs[0,0].plot(t0, u0)[0]
+    self.handles["alphadd"] = self.axs[0,0].plot(t0, u0, 
+      color="tab:blue")[0]
     # alpha & alpha-dot
-    self.handles["alpha"] = self.axs[0,1].plot(t0, x0[9], label=r"$\alpha$")[0]
+    self.handles["alpha"] = self.axs[0,1].plot(t0, x0[9], label=r"$\alpha$", 
+      color="tab:blue")[0]
     self.handles["alphad"] = self.axs[0,1].plot(t0, x0[10], 
-      label=r"$\dot{\alpha}$")[0]
-    self.axs[0,1].legend()
+      label=r"$\dot{\alpha}$", color="tab:orange")[0]
     # q
-    self.handles["q0"] = self.axs[1,0].plot(t0, x0[0], label=r"$\eta$")[0]
+    self.handles["q0"] = self.axs[1,0].plot(t0, x0[0], 
+      label=r"$\eta$", color="tab:blue")[0]
     self.handles["q1"] = self.axs[1,0].plot(t0, x0[1], 
-      label=r"$\varepsilon_x$")[0]
+      label=r"$\varepsilon_x$", color="tab:orange")[0]
     self.handles["q2"] = self.axs[1,0].plot(t0, x0[2], 
-      label=r"$\varepsilon_y$")[0]
+      label=r"$\varepsilon_y$", color="tab:green")[0]
     self.handles["q3"] = self.axs[1,0].plot(t0, x0[3], 
-      label=r"$\varepsilon_z$")[0]
+      label=r"$\varepsilon_z$", color="tab:red")[0]
     qnorm = np.linalg.norm(x0[0:4])
-    self.handles["qn"] = self.axs[1,0].plot(t0, qnorm, label="|$q$|")[0]
-    self.axs[1,0].legend()
+    self.handles["qn"] = self.axs[1,0].plot(t0, qnorm, 
+      label="|$q$|", color="tab:purple")[0]
     # omega_s
-    self.handles["wx"] = self.axs[1,1].plot(t0, x0[4], label="$\omega_x$")[0]
-    self.handles["wy"] = self.axs[1,1].plot(t0, x0[5], label="$\omega_y$")[0]
-    self.handles["wz"] = self.axs[1,1].plot(t0, x0[6], label="$\omega_z$")[0]
+    self.handles["wx"] = self.axs[1,1].plot(t0, x0[4], 
+      label="$\omega_x$", color="tab:blue")[0]
+    self.handles["wy"] = self.axs[1,1].plot(t0, x0[5], 
+      label="$\omega_y$", color="tab:orange")[0]
+    self.handles["wz"] = self.axs[1,1].plot(t0, x0[6], 
+      label="$\omega_z$", color="tab:green")[0]
     wnorm = np.linalg.norm(x0[4:7])
-    self.handles["wn"] = self.axs[1,1].plot(t0, wnorm, label="|$\omega$|")[0]
-    self.axs[1,1].legend()
+    self.handles["wn"] = self.axs[1,1].plot(t0, wnorm, 
+      label="|$\omega$|", color="tab:purple")[0]
     # r_x & r_y
-    self.handles["rx"] = self.axs[2,0].plot(t0, x0[7])[0]
-    self.handles["ry"] = self.axs[2,1].plot(t0, x0[8])[0]
+    self.handles["rx"] = self.axs[2,0].plot(t0, x0[7], 
+      label="x")[0]
+    self.handles["ry"] = self.axs[2,0].plot(t0, x0[8], 
+      label="y")[0]
     
-  def update_interactive(self, v_t, v_x, v_u):
+    if self.obs:
+      ## Repeat, but for x-hat (assuming accurate xhat0)
+      # alpha & alpha-dot
+      self.handles["alphah"] = self.axs[0,1].plot(t0, x0[9], 
+        label=r"$\hat{\alpha}$", linestyle="dashed", color="tab:blue")[0]
+      self.handles["alphadh"] = self.axs[0,1].plot(t0, x0[10], 
+        label=r"$\hat{\dot{\alpha}}$", linestyle="dashed", 
+        color="tab:orange")[0]
+      # q
+      self.handles["q0h"] = self.axs[1,0].plot(t0, x0[0],
+        label=r"$\hat{\eta}$", linestyle="dashed", color="tab:blue")[0]
+      self.handles["q1h"] = self.axs[1,0].plot(t0, x0[1], 
+        label=r"$\hat{\varepsilon}_x$", linestyle="dashed", 
+        color="tab:orange")[0]
+      self.handles["q2h"] = self.axs[1,0].plot(t0, x0[2], 
+        label=r"$\hat{\varepsilon}_y$", linestyle="dashed", 
+        color="tab:green")[0]
+      self.handles["q3h"] = self.axs[1,0].plot(t0, x0[3], 
+        label=r"$\hat{\varepsilon}_z$", linestyle="dashed", 
+        color="tab:red")[0]
+      self.handles["qnh"] = self.axs[1,0].plot(t0, qnorm, 
+        label="|$\hat{q}$|", linestyle="dashed", color="tab:purple")[0]
+      # omega_s
+      self.handles["wxh"] = self.axs[1,1].plot(t0, x0[4], 
+        label="$\hat{\omega}_x$", linestyle="dashed", color="tab:blue")[0]
+      self.handles["wyh"] = self.axs[1,1].plot(t0, x0[5], 
+        label="$\hat{\omega}_y$", linestyle="dashed", color="tab:orange")[0]
+      self.handles["wzh"] = self.axs[1,1].plot(t0, x0[6], 
+        label="$\hat{\omega}_z$", linestyle="dashed", color="tab:green")[0]
+      self.handles["wnh"] = self.axs[1,1].plot(t0, wnorm, 
+        label="|$\hat{\omega}$|", linestyle="dashed", color="tab:purple")[0]
+      # r_x & r_y
+      # self.handles["rxh"] = self.axs[2,0].plot(t0, x0[7], 
+        # label="$\hat{x}$", linestyle="dashed")[0]
+      # self.handles["ryh"] = self.axs[2,0].plot(t0, x0[8], 
+        # label="$\hat{y}$", linestyle="dashed")[0]
+    
+    # Make legends
+    self.axs[0,1].legend()
+    self.axs[1,0].legend()
+    self.axs[1,1].legend()
+    # self.axs[2,0].legend()
+    
+  def update_interactive(self, v_t, v_x, v_u, v_xhat=None):
     
     for handle in self.handles.values():
       # They all have the same xdata
@@ -145,6 +200,28 @@ class PlotterX:
     # r_x & r_y
     self.handles["rx"].set_ydata(v_x[:,7])
     self.handles["ry"].set_ydata(v_x[:,8])
+    
+    if self.obs:
+      ## Repeat, but for x-hat
+      # alpha & alpha-dot
+      self.handles["alphah"].set_ydata(v_xhat[:,9])
+      self.handles["alphadh"].set_ydata(v_xhat[:,10])
+      # q
+      self.handles["q0h"].set_ydata(v_xhat[:,0])
+      self.handles["q1h"].set_ydata(v_xhat[:,1])
+      self.handles["q2h"].set_ydata(v_xhat[:,2])
+      self.handles["q3h"].set_ydata(v_xhat[:,3])
+      qnorm = np.linalg.norm(v_xhat[:,0:4], axis=1)
+      self.handles["qnh"].set_ydata(qnorm)
+      # omega_s
+      self.handles["wxh"].set_ydata(v_xhat[:,4])
+      self.handles["wyh"].set_ydata(v_xhat[:,5])
+      self.handles["wzh"].set_ydata(v_xhat[:,6])
+      wnorm = np.linalg.norm(v_xhat[:,4:7], axis=1)
+      self.handles["wnh"].set_ydata(wnorm)
+      # r_x & r_y
+      # self.handles["rxh"].set_ydata(v_xhat[:,7])
+      # self.handles["ryh"].set_ydata(v_xhat[:,8])
     
     # Adjust limits
     for ax in self.axs.flatten():

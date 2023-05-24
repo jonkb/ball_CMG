@@ -17,11 +17,11 @@ class CMGBall:
   # Constants
   n_x = 11 # Length of state vector
   n_u = 1 # Number of inputs. Currently only n_u=1 is supported
-  n_ym = 9 # Number of measurements.
+  n_ym = 10 # Number of measurements.
   g = 9.8 # Gravity
   
   def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
-      km=20, ra=np.array([0, 0, 0]), lams=None):
+      km=10, ra=np.array([0, 0, 0]), lams=None):
     """ All parameters are floats:
     Is: Moment of inertia for the sphere
       Translates to [Is]=diag([Is, Is, Is]) because of symmetry
@@ -276,14 +276,15 @@ class CMGBall:
     
     return xd
   
-  def measure(self, x, u, xd=None, sensors=["accel", "gyro", "mag"]):
+  def measure(self, x, u, xd=None, sensors=["accel", "gyro", "mag", 
+      "encoder"]):
     """ Simulate a sensor measurement at the given state
     
     Accelerometer
       rdd_a = rdd_s + rdd_{a/s}
       rdd_{a/s} = wa x (wa x r_a/s)  (in a-frame)
     
-    TODO: Gyro, Magnetometer, GPS, +Noise (optional)
+    TODO: GPS, +Noise (optional)
     """
     
     outputs = []
@@ -347,6 +348,11 @@ class CMGBall:
         north__a = flatn(q_sa * q_s0.conjugate() * 
           sharpn(north__0) * q_s0 * q_sa.conjugate())
         outputs.append(north__a)
+      
+      if sensor == "encoder":
+        # Measure the angle alpha
+        alpha = x[9]
+        outputs.append([alpha])
     
     # Return all sensor data as a single (n_ym,) array
     ym = np.concatenate(outputs)
@@ -530,9 +536,9 @@ if __name__ == "__main__":
   x0[4] = 0.0 # Omega-x
   x0[5] = 0.0 # Omega-y
   x0[6] = 0.0 # Omega-z
-  x0[9] = 0.01 #90 * np.pi/180 # alpha
-  x0[10] = 0.01 #5 * np.pi/180 # alphad
-  u = 0.0 # pwm input for alphadd
+  x0[9] = 0.0 #90 * np.pi/180 # alpha
+  x0[10] = 0.0 #5 * np.pi/180 # alphad
+  u = 0.01 # pwm input for alphadd
   alphadd = ball.pwm2aa(u)
   
   # Observer testing
