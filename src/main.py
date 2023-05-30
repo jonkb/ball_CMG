@@ -35,16 +35,29 @@ def simple_test():
   """ Simple preset control input test
   """
   
-  alphadd = 0.2
+  # alphadd = 0.05
   #alphaddf = lambda t: 10*np.exp(t)
   # alphaddf = lambda t: alphadd*np.ones_like(t)
-  #alphaddf = lambda t: 24*np.cos(2*np.pi*t)
+  alphaddf = lambda t: 0.05*t*np.sin(2*np.pi*t/2) * (t <= 2.25)
   ball = CMGBall(ra=np.array([0.02, 0, 0]))
-  cnt = PreSet(ball, alphadd)
-
-  sim = Simulation(cnt, t_max=0.75)
+  # cnt = PreSet(ball, alphadd)
+  cnt = PreSet(ball, alphaddf)
   
-  sim.run(fname="tmp.dill")
+  x0 = np.zeros(11)
+  x0[0] = 1 # Real part of quaternion starts at 1
+  # x0[9] = 0.01 # Start with some alpha
+  x0[10] = 0.01
+  x0[5] = 0.01 # Start with some wy
+  x0[6] = 0.01 # Start with some wz
+  # u0 = 0.001 # HARD CODED IN Simulation.py
+  
+  sim = Simulation(cnt, t_max=6, x0=x0)
+
+  # sim = Simulation(cnt, t_max=0.75)
+  # sim.run(fname="tmp.dill")
+  
+  fname = f"ST_tmp.dill"
+  sim.run_dt(plotting=True, fname=fname)
   return sim
 
 def FF_test(tag):
@@ -57,6 +70,7 @@ def FF_test(tag):
   
   x0 = np.zeros(11)
   x0[0] = 1 # Real part of quaternion starts at 1
+  x0[6] = 0.001 # Start with some wz
   x0[9] = 0.01 # Start with some alpha
   x0[10] = 0.01
   
@@ -68,25 +82,30 @@ def FF_test(tag):
 
 def MPC_test(tag, ball=None):
   
-  p_ref = lambda t: np.array([-1.5,2.0])#*(1-np.exp(-4*t))
+  # p_ref = lambda t: np.array([2.0,1.0])#*(1-np.exp(-4*t))
+  v_ref = lambda t: np.array([0.10,0.50])
   if ball is None:
     ball = CMGBall()
   
   x0 = np.zeros(11)
   x0[0] = 1 # Real part of quaternion starts at 1
+  x0[6] = 0.001 # Start with some wz
   # x0[9] = 0.01 # Start with some alpha
-  x0[10] = 0.01
+  # x0[10] = 0.01
   
   MPCprms = {
     "N_window": 5,
     "ftol_opt": 0.01,
     "maxit_opt": 4,
     "v0_penalty": 0.0,
-    "w0_penalty": 0.0001
+    "w0_penalty": 0.0005,
+    "w0_max": 10
   }
-  cnt = MPC(ball, p_ref, ref_type="p", dt_cnt=0.30, 
+  # cnt = MPC(ball, p_ref, ref_type="p", dt_cnt=0.30, 
+    # options=MPCprms)
+  cnt = MPC(ball, v_ref, ref_type="v", dt_cnt=0.30, 
     options=MPCprms)
-  sim = Simulation(cnt, t_max=0.1, x0=x0)
+  sim = Simulation(cnt, t_max=4.0, x0=x0)
   fname = f"MPC_{tag}.dill"
   sim.run_dt(plotting=True, fname=fname)
   return sim
@@ -167,10 +186,10 @@ if __name__ == "__main__":
   # load_and_plot("MPC_0517_1.dill")
   
   # Run a new simulation
-  # sim = simple_test()
+  sim = simple_test()
   # sim = FF_test("0524_1")
   # sim = dt_test()
-  sim = MPC_test("0524_0")
+  # sim = MPC_test("0529_1")
   
   toc(times, "Simulation")
   

@@ -38,7 +38,9 @@ class PlotterX:
     self.fig, self.axs = plt.subplots(3,2, sharex=True)
     # Move & resize
     mngr = plt.get_current_fig_manager()
-    mngr.window.setGeometry(100,100,1100,600)
+    mngr.window.setGeometry(25,50,1450,900)
+    self.fig.subplots_adjust(left=0.05, right=0.98, bottom=0.09, top=0.96,
+      wspace=.13, hspace=.19)
     # 0,0 - Input alpha acceleration
     # self.axs[0,0].set_title(r"Input gyro acceleration $\ddot{\alpha}$")
     self.axs[0,0].set_title(r"Input gyro pwm $u$")
@@ -53,8 +55,8 @@ class PlotterX:
     # self.axs[2,0].set_title("X-Position $r_x$")
     self.axs[2,0].set_title("Position $r_x$, $r_y$")
     # 2,1
-    # self.axs[2,1].set_xlabel("Time t")
-    # self.axs[2,1].set_title("Y-Position $r_y$")
+    self.axs[2,1].set_xlabel("Time t")
+    self.axs[2,1].set_title("Accelerometer Data $y_m$")
     
     # TODO: Put X&Y together, and put sensor data in the other
     #   Or add a row if I want more than accel data. Or remove rx & ry
@@ -126,9 +128,16 @@ class PlotterX:
       label="|$\omega$|", color="tab:purple")[0]
     # r_x & r_y
     self.handles["rx"] = self.axs[2,0].plot(t0, x0[7], 
-      label="x")[0]
+      label="$r_x$")[0]
     self.handles["ry"] = self.axs[2,0].plot(t0, x0[8], 
-      label="y")[0]
+      label="$r_y$")[0]
+    # y_m
+    self.handles["ym0"] = self.axs[2,1].plot(t0, 0, color="tab:blue",
+      label="$\ddot{r}_{ax}$")[0]
+    self.handles["ym1"] = self.axs[2,1].plot(t0, 0, color="tab:orange",
+      label="$\ddot{r}_{ay}$")[0]
+    self.handles["ym2"] = self.axs[2,1].plot(t0, 0, color="tab:green",
+      label="$\ddot{r}_{az}$")[0]
     
     if self.obs:
       ## Repeat, but for x-hat (assuming accurate xhat0)
@@ -168,12 +177,13 @@ class PlotterX:
         # label="$\hat{y}$", linestyle="dashed")[0]
     
     # Make legends
-    self.axs[0,1].legend()
-    self.axs[1,0].legend()
-    self.axs[1,1].legend()
-    # self.axs[2,0].legend()
+    self.axs[0,1].legend(loc='upper left')
+    self.axs[1,0].legend(loc='upper left')
+    self.axs[1,1].legend(loc='upper left')
+    self.axs[2,0].legend(loc='upper left')
+    self.axs[2,1].legend(loc='upper left')
     
-  def update_interactive(self, v_t, v_x, v_u, v_xhat=None):
+  def update_interactive(self, v_t, v_x, v_u, v_ym, v_xhat=None):
     
     for handle in self.handles.values():
       # They all have the same xdata
@@ -200,6 +210,10 @@ class PlotterX:
     # r_x & r_y
     self.handles["rx"].set_ydata(v_x[:,7])
     self.handles["ry"].set_ydata(v_x[:,8])
+    # accelerometer
+    self.handles["ym0"].set_ydata(v_ym[:,0])
+    self.handles["ym1"].set_ydata(v_ym[:,1])
+    self.handles["ym2"].set_ydata(v_ym[:,2])
     
     if self.obs:
       ## Repeat, but for x-hat
@@ -251,7 +265,7 @@ class AnimatorXR:
     # Open figure & set location & size
     self.fig = plt.figure()
     mngr = plt.get_current_fig_manager()
-    mngr.window.setGeometry(1250,100,600,600)
+    mngr.window.setGeometry(1500,100,375,400)
     # Make axis
     self.ax = plt.axes(xlim=self.lims[0], ylim=self.lims[1])
     self.ax.set_aspect("equal")
@@ -266,6 +280,7 @@ class AnimatorXR:
       self.h_ref, = self.ax.plot([], [], linestyle="-", color="#0b05", marker=".", markersize=4)
     else:
       print("ref_type besides 'p' not currently supported for animation")
+      # TODO: show v-ref & a-refs as an arrow
   
   def update(self, v_t, v_x):
     """ Update the drawing

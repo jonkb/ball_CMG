@@ -17,7 +17,7 @@ class CMGBall:
   # Constants
   n_x = 11 # Length of state vector
   n_u = 1 # Number of inputs. Currently only n_u=1 is supported
-  n_ym = 10 # Number of measurements.
+  n_ym = 3#10 # Number of measurements.
   g = 9.8 # Gravity
   
   def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
@@ -175,7 +175,7 @@ class CMGBall:
     """
     
     # Redefine measure with augmented xa vector, xa=[x,u]
-    ymf = lambda xa: self.measure(xa[0:11], xa[11])
+    ymf = lambda xa: self.measure(xa[0:11], xa[11], noisy=False)
     x0a = np.concatenate((x, [u]))
     mJ = FD(ymf, x0a)
     mJC = mJ[:,0:11]
@@ -276,8 +276,9 @@ class CMGBall:
     
     return xd
   
-  def measure(self, x, u, xd=None, sensors=["accel", "gyro", "mag", 
-      "encoder"]):
+  def measure(self, x, u, xd=None, 
+    sensors=["accel"],#, "gyro", "mag", "encoder"],
+    noisy=True):
     """ Simulate a sensor measurement at the given state
     
     Accelerometer
@@ -329,6 +330,10 @@ class CMGBall:
         # Acceleration of accel relative to sphere. \ddot{r}_{a/s}
         rdd_ars = np.cross(omega_a__a, np.cross(omega_a__a, self.ra))
         rdd_a = rdd_s__a + rdd_ars
+        
+        # ADD NOISE
+        if noisy:
+          rdd_a += (np.random.rand(3)*2-1) * 1e-2
         
         outputs.append(rdd_a)
       

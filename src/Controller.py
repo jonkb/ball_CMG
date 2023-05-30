@@ -158,12 +158,13 @@ class MPC(Controller):
   
   name = "MPC controller"
   # MPC options, settable through constructor
-  opt_names = ("N_window", "ftol_opt", "maxit_opt", "v0_penalty", "w0_penalty")
+  opt_names = ("N_window", "ftol_opt", "maxit_opt", "v0_penalty", "w0_penalty", "w0_max")
   N_window = 4
   ftol_opt = 1e-3 # ftol for MPC optimization
   maxit_opt = 10
   v0_penalty = 0.0
   w0_penalty = 0.0
+  w0_max = None
   
   def __init__(self, ball, ref, ref_type="v", dt_cnt=0.2, options={}):
     """
@@ -175,6 +176,8 @@ class MPC(Controller):
       "N_window"
       "ftol_opt"
       "v0_penalty" - how much to penalize high speeds
+      "w0_penalty" - how much to penalize high angular speeds
+      "w0_max" - If w0_penalty > 0, attempt to keep w0 below w0_max 
     """
     
     self.ball = ball
@@ -258,6 +261,11 @@ class MPC(Controller):
       if self.w0_penalty > 0:
         w = np.array([xi[4:7] for xi in sol.y.T])
         l2 += self.w0_penalty * np.sum(np.square(w))
+        if self.w0_max is not None:
+          # External barrier penalty method
+          wn = np.linalg.norm(w, axis=0)
+          wover = (wn-self.w0_max) * (wn > self.w0_max)
+          l2 += 1000 * self.w0_penalty * np.sum(np.square(wover))
       return l2
     
     # NOTE: Technically, I could provide an analytical jacobian of cost.
@@ -278,13 +286,16 @@ class Observer:
   Maybe move to a different file?
   """
   
-  dt_obs = 0.001
+  dt_obs = 0.002
   nx = 11
   x_subset = np.array([0,1,2,3,4,5,6,9,10]) # Focus on q, omega, and alpha
   # x_subset = np.array([0,1,2,3,4,5,6]) # Not estimating alpha
   # x_subset = np.arange(11)
   # Limits on quantities in xhat
-  xhat_max = np.array([1.,1.,1.,1., 15.,15.,15., np.inf,12.])
+  # xhat_max = np.array([1.,1.,1.,1., 15.,15.,15., np.inf,12.])
+  xhat_max = np.array([1.,1.,1.,1., 150.,150.,150., np.inf,120.])
+  # Limits on xhat_dot
+  xhd_max = np.array([10.,10.,10.,10., 1500.,1500.,1500., 120.,1200.])
   L = np.array(
     [[ 1.18993274e-15,  1.54015810e-06,  2.26394918e-06,
       -4.52789720e-10, -6.94786078e-16,  9.60169444e-16,
@@ -341,14 +352,14 @@ class Observer:
     # Settings (TODO: make prms)
     # desired observer poles
     zeta_obs1 = 0.8
-    wn_obs1 = 10
+    wn_obs1 = 1
     zeta_obs2 = 0.8
-    wn_obs2 = 11
+    wn_obs2 = 1.2
     zeta_obs3 = 0.8
-    wn_obs3 = 12
+    wn_obs3 = 1.4
     zeta_obs4 = 0.8
-    wn_obs4 = 13
-    p_obs5 = -14
+    wn_obs4 = 1.6
+    p_obs5 = -1.8
     des_obsv_char_poly = np.convolve(
       np.convolve(
         np.convolve(
@@ -368,8 +379,19 @@ class Observer:
     """
     # In the future, maybe only update the linearization every once in a while
     self.update_ABCDL(self.x_hat, u)
+    
+    # TEMP DEBUGGING
+    # self.xhdot(self.x_hat, y_m, u)
+    # quit()
+    
     # Integrate the observer ODE
     raw_x_hat = rk4(self.xhdot, self.x_hat, self.dt_obs, (y_m,u))
+    # print(380, raw_x_hat)
+    # q = cleanup_versor(np.quaternion(*raw_x_hat[0:4]))
+    # print(382, q.w, q.x, q.y, q.z)
+    # raw_x_hat[0:4] = [q.w, q.x, q.y, q.z]
+    # print(384, raw_x_hat)
+    # print(385, np.maximum(np.minimum(raw_x_hat, self.xhat_max), -self.xhat_max))
     self.x_hat = self.cleanup_xhat(raw_x_hat)
     # print(374, self.x_hat, self.xhat_max)
     return self.augment_xhat(self.x_hat)
@@ -382,7 +404,7 @@ class Observer:
     
     x_hat = np.copy(raw_x_hat)
     # Normalize the versor to counter numerical drift
-    q = np.quaternion(*self.x_hat[0:4])
+    q = np.quaternion(*x_hat[0:4])
     q = cleanup_versor(q)
     x_hat[0:4] = [q.w, q.x, q.y, q.z]
     # Enforce limits
@@ -409,9 +431,15 @@ class Observer:
     else:
       full_x = x
     
+    # Linearization
     A, B = self.ball.JABf(full_x, u=u)
     # print(A!=0)
     C, D = self.ball.mJCDf(full_x, u)
+    # Store the most recent linearization point
+    self.xe = np.copy(full_x)
+    self.ue = np.copy(u)
+    self.xde = self.ball.eom(full_x, u) # TODO: Repeated evaluation...
+    self.yme = self.ball.measure(full_x, u)
     
     # Focus on q, omega, and alpha
     self.A = A[np.ix_(self.x_subset, self.x_subset)]
@@ -448,12 +476,58 @@ class Observer:
     #   Note: y_pred = C*xhat - D*u
     #   Note: B*u needs to change to B@u if u becomes an array
     
+    # DEBUGGING:
     # print(388, self.L.shape, self.A.shape, self.B.shape, self.C.shape, self.D.shape)
     # print(389, x_hat.shape, u, y_m.shape)
+    # xh = self.augment_xhat(x_hat)
+    # print(459, x_hat, y_m, u)
+    # xt = x_hat - self.xe[self.x_subset]
+    # ut = u - self.ue
+    # print(
+      # f"xhdot_AB: self.xde + self.A @ xt + self.B @ ut",
+      # f"\n\t={self.xde[self.x_subset]} + {self.A @ xt} + {self.B * ut}",
+      # f"\n\t={self.xde[self.x_subset] + self.A @ xt + self.B * ut}")
+    # print(
+      # f"xhdot_eom: {self.ball.eom(xh, u)}"
+    # )
     
-    xhat_dot = self.A @ x_hat \
-      + self.B * u \
-      + self.L @ (y_m - self.C @ x_hat - self.D * u)
+    # Difference from linearization point
+    xh_tilde = x_hat - self.xe[self.x_subset]
+    u_tilde = u - self.ue
+    
+    xhd_pred = self.xde[self.x_subset] +  self.A @ xh_tilde + self.B * u_tilde
+    ym_pred = self.yme + self.C @ xh_tilde + self.D * u_tilde
+    
+    xhd_nlpred = self.ball.eom(self.augment_xhat(x_hat), u)[self.x_subset]
+    ym_nlpred = self.ball.measure(self.augment_xhat(x_hat), u)
+    
+    # err_nl_xhd = np.linalg.norm(xhd_nlpred - xhd_pred)
+    # err_nl_ym = np.linalg.norm(ym_nlpred - ym_pred)
+    # print("Nonlinearity errors",
+      # f"\n\txhd %err_nl = {100*err_nl_xhd / np.linalg.norm(xhd_nlpred)}",
+      # f"\n\tym %err_nl = {100*err_nl_ym / np.linalg.norm(ym_nlpred)}")
+    # print("Observer xhdot", f"\n\tPredictor: {xhd_nlpred}",
+      # f"\n\tCorrector: {self.L @ (y_m - ym_nlpred)}",
+      # f"\n\tym: {y_m}",
+      # f"\n\tym_pred: {ym_nlpred}")
+      
+    # xhd_nlpred *= 1.0 + (np.random.rand(*xhd_nlpred.shape)*2-1)*1e-3 # TEMP, TESTING
+    
+    # print(517, y_m - ym_nlpred, self.L @ (y_m - ym_nlpred))
+    
+    # xhat_dot = xhd_pred + self.L @ (y_m - ym_pred)
+    xhat_dot = xhd_nlpred + self.L @ (y_m - ym_nlpred)
+    
+    # print(f"%Innovation = {100*np.mean((self.L @ (y_m - ym_nlpred)) / xhat_dot):.2f}")
+    
+    # xhat_dot = self.A @ x_hat \
+      # + self.B * u \
+      # + self.L @ (y_m - self.C @ x_hat - self.D * u)
+    
+    # Saturate
+    xhat_dot = np.maximum(np.minimum(
+      xhat_dot, self.xhd_max), -self.xhd_max)
+    
     return xhat_dot
 
 

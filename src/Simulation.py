@@ -31,7 +31,7 @@ class Simulation:
   #   For best performance, the other 'dt's should be integer multiples 
   #   of dt_dyn.
   dt_dyn = 0.0005
-  dt_plt = 0.01
+  dt_plt = 0.05
   
   def __init__(self, cnt, t_max=1, x0=None):
     """
@@ -49,7 +49,9 @@ class Simulation:
     self.x0 = x0
     
     # Initialize observer
-    self.obs = Observer(cnt.ball, x0)
+    # Add uncertainty to observer x0
+    x0u = x0 + (np.random.rand(x0.size)*2-1) * 1e-4
+    self.obs = Observer(cnt.ball, x0u)
   
   def __str__(self):
     s = "Simulation Object\n"
@@ -90,7 +92,8 @@ class Simulation:
     t_next_obs = v_t[0]
     t_next_cnt = v_t[0]
     t_next_plt = v_t[0]
-    u = 0.0 # Current control input NOTE: May be vector later
+    # u = 0.001 #0.0 # Current control input NOTE: May be vector later
+    u = 0.0
     x = np.copy(self.x0)
     # Store everything
     v_x = np.empty((v_t.size, self.ball.n_x))
@@ -110,6 +113,8 @@ class Simulation:
         x_hat = self.obs.update(ym, u)
         # Don't update observer again until dt_obs time has passed
         t_next_obs += self.obs.dt_obs
+        
+        # print(114, x_hat)
       
       # Store state, input, and measurement at every timestep
       v_x[i] = x
@@ -119,8 +124,9 @@ class Simulation:
       
       if t >= t_next_cnt:
         # Update control
-        # TEMP: CHEAT
-        u = self.cnt.update(t, x)#x_hat)
+        u = self.cnt.update(t, x_hat)
+        # TEMP: CHEAT to work with MPC p-ref
+        # u = self.cnt.update(t, x)#x_hat)
         # Don't update control again until dt_cnt time has passed
         t_next_cnt += self.cnt.dt_cnt
       
@@ -130,7 +136,7 @@ class Simulation:
       
       if plotting and (t >= t_next_plt):
         plotter.update_interactive(v_t[0:i+1], v_x[0:i+1], v_u[0:i+1], 
-          v_xhat=v_xhat[0:i+1])
+          v_ym=v_ym[0:i+1], v_xhat=v_xhat[0:i+1])
         animator.update(v_t[0:i+1], v_x[0:i+1])
         # Don't update plots again until dt_plt time has passed
         t_next_plt += self.dt_plt
