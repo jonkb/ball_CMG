@@ -184,9 +184,10 @@ if __name__ == "__main__":
   
   # Load an existing sim from file
   # load_and_plot("MPC_0517_1.dill")
+  load_and_plot("ST_tmp.dill")
   
   # Run a new simulation
-  sim = simple_test()
+  # sim = simple_test()
   # sim = FF_test("0524_1")
   # sim = dt_test()
   # sim = MPC_test("0529_1")

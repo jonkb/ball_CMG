@@ -365,12 +365,15 @@ class CMGBall:
     return ym
 
 class SerializableBall:
-  def __init__(self, ball):
+  def __init__(self, ball, include_lams=False):
     """
     Convert a CMGBall object (ball) to a serializable form.
     This allows it to be saved to file.
-    The lambdified sympy functions have a hard time being serialized, so leave 
-      them out.
+    
+    if include_lams, the lambdified functions will be written to file and
+      their filenames included in this object. This makes the ball load faster,
+      especially if extraordinarily large lambda functions are to be saved.
+      The downside is that it creates many files, sometimes large ones.
     """
     
     # Constants
@@ -386,8 +389,10 @@ class SerializableBall:
     # Current timestamp
     self.dtstr = ISOnow()
     self.fname = f"ball_{self.dtstr}.dill"
-    # Save lambdified functions
-    self.save_lams(ball)
+    self.include_lams = include_lams
+    if include_lams:
+      # Save lambdified functions
+      self.save_lams(ball)
   
   def save_lams(self, ball):
     """ Save the lambdified functions to file
@@ -428,7 +433,10 @@ class SerializableBall:
     """
     Return a CMGBall object
     """
-    lams = self.load_lams()
+    if self.include_lams:
+      lams = self.load_lams()
+    else:
+      lams = None
     ball = CMGBall(Is=self.Is, Ig1=self.Ig1, Ig2=self.Ig2, m=self.m, 
       Rs=self.Rs, Omega_g=self.Omega_g, km=self.km, lams=lams)
     return ball

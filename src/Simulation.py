@@ -142,7 +142,7 @@ class Simulation:
         t_next_plt += self.dt_plt
     
     # Save result
-    self.sol = SolV(v_t, v_x, v_u, v_ym)
+    self.sol = SolV(v_t, v_x, v_u, v_ym, v_xhat)
     self.status = "solved"
     if fname is not None:
       self.save(fname)
@@ -302,7 +302,7 @@ class Simulation:
     return fig1, fig2, fig3
 
 class SolV:
-  def __init__(self, v_t, v_x, v_u, v_ym):
+  def __init__(self, v_t, v_x, v_u, v_ym, v_xhat):
     """ Pack the solution vectors in a single solution object
     
     The "V" is for vector, because it stores a bunch of vectors instead of
@@ -314,6 +314,7 @@ class SolV:
     self.v_x = v_x
     self.v_u = v_u
     self.v_ym = v_ym
+    self.v_xhat = v_xhat
   
 
 class SerializableSim:

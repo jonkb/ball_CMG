@@ -286,7 +286,7 @@ class Observer:
   Maybe move to a different file?
   """
   
-  dt_obs = 0.002
+  dt_obs = 0.005
   nx = 11
   x_subset = np.array([0,1,2,3,4,5,6,9,10]) # Focus on q, omega, and alpha
   # x_subset = np.array([0,1,2,3,4,5,6]) # Not estimating alpha
@@ -351,13 +351,13 @@ class Observer:
     self.x_hat = self.x_hat[self.x_subset]
     # Settings (TODO: make prms)
     # desired observer poles
-    zeta_obs1 = 0.8
+    zeta_obs1 = 0.9
     wn_obs1 = 1
-    zeta_obs2 = 0.8
+    zeta_obs2 = 0.9
     wn_obs2 = 1.2
-    zeta_obs3 = 0.8
+    zeta_obs3 = 0.9
     wn_obs3 = 1.4
-    zeta_obs4 = 0.8
+    zeta_obs4 = 0.9
     wn_obs4 = 1.6
     p_obs5 = -1.8
     des_obsv_char_poly = np.convolve(
@@ -531,6 +531,154 @@ class Observer:
     return xhat_dot
 
 
+class Obs_harm:
+  """ Luenberger observer for a harmonic oscillator. For testing
+  """
+  
+  dt_obs = 0.001 # May break if this is different from dt_dyn
+  nx = 2
+  # Parameters
+  m = 1
+  b = .1
+  k = 1
+  # Constant ABCD
+  A = np.array([
+    [0, 1],
+    [-k/m, -b/m] # xdd = -k/m *x - b/m *xd
+  ])
+  B = np.array([
+    0,
+    1/m
+  ])
+  C = np.array([
+    [1, 0]
+  ])
+  D = np.array([0])
+  
+  def __init__(self, x0):
+    # Initialize state estimate
+    self.x_hat = np.copy(x0)
+    # desired observer poles
+    zeta_obs1 = 0.9
+    wn_obs1 = 4
+    des_obsv_char_poly = [1, 2*zeta_obs1*wn_obs1, wn_obs1**2]
+    self.des_obsv_poles = np.roots(des_obsv_char_poly)
+    
+    self.find_L()
+  
+  def update(self, y_m, u):
+    """ Update the state estimation
+    
+    y_m - measurement
+    u - last control input
+    """
+    
+    
+    # Integrate the observer ODE
+    self.x_hat = rk4(self.xhdot, self.x_hat, self.dt_obs, (y_m,u))
+    
+    return self.x_hat
+  
+  
+  def find_L(self):
+    """ Calculate observer gains L
+    
+    Assumes that x is an xhat, defining self.x_subset indices of the full
+      state vector
+    """
+    
+    
+    # Observability matrix
+    O = control.ctrb(self.A.T, self.C.T)
+    
+    
+    if np.linalg.matrix_rank(O) == self.nx:
+      # System is observable. Calculate observer gains.
+      self.L = control.place(self.A.T, self.C.T, self.des_obsv_poles).T
+      # print(309, f"New L={np.array_repr(self.L)}")
+      # print(309, f"Calculated new L. rank(O)={self.x_subset.size}")
+    else:
+      # System is not currently observable
+      print(312, "System is not observable in the current configuration:"
+        f"\n\tx={x}, u={u}"
+        f"\n\trank(O)={np.linalg.matrix_rank(O)} / {self.nx}")
+      # print(314, "Gains are being left as follows:"
+        # f"\n\tL={self.L}")
+      
+    print(608, self.L)
+  
+  def xhdot(self, x_hat, y_m, u):
+    
+    # print(612, x_hat, u, y_m)
+  
+    xhd_pred = self.A @ x_hat + self.B * u
+    ym_pred = self.C @ x_hat + self.D * u
+    
+    xhat_dot = xhd_pred + self.L @ (y_m - ym_pred)
+    
+    
+    return xhat_dot
+
+def obs_harm_test():
+  
+  def eom(x, u):
+    xd = obs.A @ x + obs.B * u
+    return xd
+  
+  def measure(x, u):
+    return obs.C @ x + obs.D * u + (np.random.rand()*2-1)*1e-1
+  
+  def control(t, x):
+    return np.sin(t)*.01 + 1
+  
+  
+  dt_dyn = 0.001
+  u = 0.0
+  x = np.array([0.0,0.0])
+  obs = Obs_harm(np.copy(x)+(np.random.rand(2)*2-1)*1e-2)
+  t_max = 8
+  # Full time vector
+  v_t = np.arange(0, t_max, dt_dyn)
+  # Store everything
+  v_x = np.empty((v_t.size, 2))
+  v_u = np.empty((v_t.size, 1))
+  v_ym = np.empty((v_t.size, 1))
+  v_xhat = np.empty((v_t.size, 2))
+  
+  ## Simulation loop
+  for i,t in enumerate(v_t):
+    # Update dynamics
+    x = rk4(eom, x, dt_dyn, (u,))
+    # Record simulated measurement data
+    ym = measure(x, u)
+    
+    # Update observer
+    x_hat = obs.update(ym, u)
+    
+    # Store state, input, and measurement at every timestep
+    v_x[i] = x
+    v_u[i] = u
+    v_ym[i] = ym
+    v_xhat[i] = x_hat
+    
+    # Update control
+    u = control(t, x_hat)
+  
+  # Plot
+  from matplotlib import pyplot as plt
+  fig, axs = plt.subplots(2,1)
+  axs[0].plot(v_t, v_x[:,0], color="red", linestyle="-")
+  axs[0].plot(v_t, v_x[:,1], color="blue", linestyle="-")
+  axs[0].plot(v_t, v_xhat[:,0], color="red", linestyle="--")
+  axs[0].plot(v_t, v_xhat[:,1], color="blue", linestyle="--")
+  # axs[1].plot(v_t, v_u)
+  axs[1].plot(v_t, v_x[:,0] - v_xhat[:,0], color="red", linestyle="-")
+  axs[1].plot(v_t, v_x[:,1] - v_xhat[:,1], color="blue", linestyle="-")
+  
+  fig.show()
+  input("PAUSE")
+
+
 if False: # OLD MPC - Copied from Simulation
 
   # Parameters for MPC
@@ -666,6 +814,10 @@ def obsv_test(ball):
   print(f"successes: {successses}/{N}; failures: {failures}/{N}")
 
 if __name__ == "__main__":
+  obs_harm_test()
+  quit()
+  
+  
   from CMGBall import CMGBall
   ball = CMGBall(ra=np.array([0.02, 0, 0]))
   # v_ref = lambda t: np.array([2,1]) * np.cos(t)
