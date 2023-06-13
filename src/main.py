@@ -51,7 +51,7 @@ def simple_test():
   x0[6] = 0.01 # Start with some wz
   # u0 = 0.001 # HARD CODED IN Simulation.py
   
-  sim = Simulation(cnt, t_max=6, x0=x0)
+  sim = Simulation(cnt, t_max=7, x0=x0)
   
   # sim = Simulation(cnt, t_max=0.75)
   # sim.run(fname="tmp.dill")
@@ -89,12 +89,12 @@ def MPC_test(tag, ball=None):
   
   x0 = np.zeros(11)
   x0[0] = 1 # Real part of quaternion starts at 1
-  x0[6] = 0.001 # Start with some wz
+  x0[6] = 0.01 # Start with some wz
   # x0[9] = 0.01 # Start with some alpha
-  # x0[10] = 0.01
+  x0[10] = 0.01
   
   MPCprms = {
-    "N_window": 5,
+    "N_window": 8,
     "ftol_opt": 0.01,
     "maxit_opt": 4,
     "v0_penalty": 0.0,
@@ -105,7 +105,7 @@ def MPC_test(tag, ball=None):
     # options=MPCprms)
   cnt = MPC(ball, v_ref, ref_type="v", dt_cnt=0.30, 
     options=MPCprms)
-  sim = Simulation(cnt, t_max=4.0, x0=x0)
+  sim = Simulation(cnt, t_max=6.0, x0=x0)
   fname = f"MPC_{tag}.dill"
   sim.run_dt(plotting=True, fname=fname)
   return sim
@@ -187,10 +187,10 @@ if __name__ == "__main__":
   # load_and_plot("ST_tmp.dill")
   
   # Run a new simulation
-  sim = simple_test()
+  # sim = simple_test()
   # sim = FF_test("0524_1")
   # sim = dt_test()
-  # sim = MPC_test("0529_1")
+  sim = MPC_test("0612_1")
   
   toc(times, "Simulation")
   

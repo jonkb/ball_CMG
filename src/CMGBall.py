@@ -17,7 +17,7 @@ class CMGBall:
   # Constants
   n_x = 11 # Length of state vector
   n_u = 1 # Number of inputs. Currently only n_u=1 is supported
-  n_ym = 3#10 # Number of measurements.
+  n_ym = 6 #10 # Number of measurements.
   g = 9.8 # Gravity
   
   def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
@@ -175,7 +175,7 @@ class CMGBall:
     """
     
     # Redefine measure with augmented xa vector, xa=[x,u]
-    ymf = lambda xa: self.measure(xa[0:11], xa[11], noisy=False)
+    ymf = lambda xa: self.measure(xa[0:11], xa[11], noisy=False, pQ0=False)
     x0a = np.concatenate((x, [u]))
     mJ = FD(ymf, x0a)
     mJC = mJ[:,0:11]
@@ -277,9 +277,14 @@ class CMGBall:
     return xd
   
   def measure(self, x, u, xd=None, 
-    sensors=["accel"],#, "gyro", "mag", "encoder"],
-    noisy=True):
+    sensors=["accel", "gyro"],#, "mag", "encoder"], "pseudoQ"
+    noisy=True, pQ0=True):
     """ Simulate a sensor measurement at the given state
+    
+    pseudoQ: Pseudo-measurement that keeps |q| = 1
+      If pQ0, then this measurement is always 0. Otherwise, it returns |q|^2-1.
+      During simulation, it should always "measure" 0, but it's left as an 
+        option so the derivatives can be calculated by FD.
     
     Accelerometer
       rdd_a = rdd_s + rdd_{a/s}
@@ -291,6 +296,15 @@ class CMGBall:
     outputs = []
     
     for sensor in sensors:
+      if sensor == "pseudoQ":
+        # This is a pseudo-measurement for |q| - 1 = 0
+        if pQ0:
+          outputs.append([0])
+        else:
+          q = [x[0], x[1], x[2], x[3]]
+          # outputs.append([np.linalg.norm(q) - 1])
+          outputs.append([np.sum(np.square(q)) - 1])
+        
       if sensor == "accel":
         # Constants
         khat = np.array([0,0,1])
@@ -333,13 +347,18 @@ class CMGBall:
         
         # ADD NOISE
         if noisy:
-          rdd_a += (np.random.rand(3)*2-1) * 1e-2
+          rdd_a += (np.random.rand(3)*2-1) * 1e-3
         
         outputs.append(rdd_a)
       
       if sensor == "gyro":
         # TODO: Simulate drift and noise
-        omega_s__s = x[4:7]
+        omega_s__s = np.copy(x[4:7])
+        
+        # ADD NOISE
+        if noisy:
+          omega_s__s += (np.random.rand(3)*2-1) * 1e-3
+        
         outputs.append(omega_s__s)
       
       if sensor == "mag":
@@ -553,6 +572,14 @@ if __name__ == "__main__":
   x0[10] = 0.0 #5 * np.pi/180 # alphad
   u = 0.01 # pwm input for alphadd
   alphadd = ball.pwm2aa(u)
+  
+  
+  # EOM testing
+  print(578, ball.eom(x0, u))
+  print(579, ball.eom(x0, u))
+  print(580, ball.eom(x0, u))
+  quit()
+  
   
   # Observer testing
   from Controller import Observer

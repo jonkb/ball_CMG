@@ -293,9 +293,9 @@ class Observer:
   # x_subset = np.arange(11)
   # Limits on quantities in xhat
   # xhat_max = np.array([1.,1.,1.,1., 15.,15.,15., np.inf,12.])
-  xhat_max = np.array([1.,1.,1.,1., 150.,150.,150., np.inf,120.])
+  xhat_max = np.array([1.,1.,1.,1., 20.,20.,20., np.inf,120.])
   # Limits on xhat_dot
-  xhd_max = np.array([10.,10.,10.,10., 1500.,1500.,1500., 120.,1200.])
+  xhd_max = np.array([10.,10.,10.,10., 20.,20.,20., 12.,10.])
   L = np.array(
     [[ 1.18993274e-15,  1.54015810e-06,  2.26394918e-06,
       -4.52789720e-10, -6.94786078e-16,  9.60169444e-16,
@@ -352,14 +352,14 @@ class Observer:
     # Settings (TODO: make prms)
     # desired observer poles
     zeta_obs1 = 0.9
-    wn_obs1 = 1
+    wn_obs1 = 10
     zeta_obs2 = 0.9
-    wn_obs2 = 1.2
+    wn_obs2 = 12
     zeta_obs3 = 0.9
-    wn_obs3 = 1.4
+    wn_obs3 = 14
     zeta_obs4 = 0.9
-    wn_obs4 = 1.6
-    p_obs5 = -1.8
+    wn_obs4 = 16
+    p_obs5 = -18
     des_obsv_char_poly = np.convolve(
       np.convolve(
         np.convolve(
@@ -495,8 +495,8 @@ class Observer:
     xh_tilde = x_hat - self.xe[self.x_subset]
     u_tilde = u - self.ue
     
-    xhd_pred = self.xde[self.x_subset] +  self.A @ xh_tilde + self.B * u_tilde
-    ym_pred = self.yme + self.C @ xh_tilde + self.D * u_tilde
+    # xhd_pred = self.xde[self.x_subset] +  self.A @ xh_tilde + self.B * u_tilde
+    # ym_pred = self.yme + self.C @ xh_tilde + self.D * u_tilde
     
     xhd_nlpred = self.ball.eom(self.augment_xhat(x_hat), u)[self.x_subset]
     ym_nlpred = self.ball.measure(self.augment_xhat(x_hat), u)

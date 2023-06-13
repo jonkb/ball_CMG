@@ -32,6 +32,8 @@ class Simulation:
   #   of dt_dyn.
   dt_dyn = 0.0005
   dt_plt = 0.05
+  # x0 uncertainty
+  x0unc = 1e-4
   
   def __init__(self, cnt, t_max=1, x0=None):
     """
@@ -50,7 +52,7 @@ class Simulation:
     
     # Initialize observer
     # Add uncertainty to observer x0
-    x0u = x0 + (np.random.rand(x0.size)*2-1) * 1e-4
+    x0u = x0 + (np.random.rand(x0.size)*2-1) * self.x0unc
     self.obs = Observer(cnt.ball, x0u)
   
   def __str__(self):
