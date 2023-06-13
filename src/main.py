@@ -37,8 +37,8 @@ def simple_test():
   
   # alphadd = 0.05
   #alphaddf = lambda t: 10*np.exp(t)
-  # alphaddf = lambda t: alphadd*np.ones_like(t)
-  alphaddf = lambda t: 0.05*t*np.sin(2*np.pi*t/2) * (t <= 2.25)
+  alphaddf = lambda t: .1*np.ones_like(t)
+  # alphaddf = lambda t: 0.05*t*np.sin(2*np.pi*t/2) * (t <= 2.25)
   ball = CMGBall(ra=np.array([0.02, 0, 0]))
   # cnt = PreSet(ball, alphadd)
   cnt = PreSet(ball, alphaddf)
@@ -46,9 +46,9 @@ def simple_test():
   x0 = np.zeros(11)
   x0[0] = 1 # Real part of quaternion starts at 1
   # x0[9] = 0.01 # Start with some alpha
-  x0[10] = 0.01
-  x0[5] = 0.01 # Start with some wy
-  x0[6] = 0.01 # Start with some wz
+  # x0[10] = 0.01
+  # x0[5] = 0.01 # Start with some wy
+  # x0[6] = 0.01 # Start with some wz
   # u0 = 0.001 # HARD CODED IN Simulation.py
   
   sim = Simulation(cnt, t_max=7, x0=x0)
@@ -187,10 +187,10 @@ if __name__ == "__main__":
   # load_and_plot("ST_tmp.dill")
   
   # Run a new simulation
-  # sim = simple_test()
+  sim = simple_test()
   # sim = FF_test("0524_1")
   # sim = dt_test()
-  sim = MPC_test("0612_1")
+  # sim = MPC_test("0612_1")
   
   toc(times, "Simulation")
   

@@ -31,9 +31,9 @@ class Simulation:
   #   For best performance, the other 'dt's should be integer multiples 
   #   of dt_dyn.
   dt_dyn = 0.0005
-  dt_plt = 0.05
+  dt_plt = 0.005
   # x0 uncertainty
-  x0unc = 1e-4
+  x0unc = 1e-9
   
   def __init__(self, cnt, t_max=1, x0=None):
     """
