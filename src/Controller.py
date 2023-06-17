@@ -440,7 +440,7 @@ class Observer:
     self.xe = np.copy(full_x)
     self.ue = np.copy(u)
     self.xde = self.ball.eom(full_x, u) # TODO: Repeated evaluation...
-    self.yme = self.ball.measure(full_x, u)
+    self.yme = self.ball.measure(full_x, u, add_noise=False)
     
     # Focus on q, omega, and alpha
     self.A = A[np.ix_(self.x_subset, self.x_subset)]
@@ -509,7 +509,7 @@ class Observer:
     # ym_pred = self.yme + self.C @ xh_tilde + self.D * u_tilde
     
     xhd_nlpred = self.ball.eom(self.augment_xhat(x_hat), u)[self.x_subset]
-    ym_nlpred = self.ball.measure(self.augment_xhat(x_hat), u)
+    ym_nlpred = self.ball.measure(self.augment_xhat(x_hat), u, add_noise=False)
     
     # err_nl_xhd = np.linalg.norm(xhd_nlpred - xhd_pred)
     # err_nl_ym = np.linalg.norm(ym_nlpred - ym_pred)

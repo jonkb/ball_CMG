@@ -91,3 +91,11 @@ def printv(vlvl, *msgs):
   """
   if verbosity >= vlvl:
     print(*msgs)
+
+def noisy(x, noise_mag):
+  """ Return a noisy version of x
+  xn = x + noise
+    noise ~ uniform(-noise_mag, noise_mag)
+  """
+  
+  return x + noise_mag*(np.random.rand(*np.shape(x))*2-1)

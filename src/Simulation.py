@@ -35,7 +35,7 @@ class Simulation:
   # x0 uncertainty
   x0unc = 1e-9
   
-  def __init__(self, cnt, t_max=1, x0=None):
+  def __init__(self, cnt, ball=None, t_max=1, x0=None):
     """
     cnt: Controller object that calculates control inputs
     t_max: Simulation end time
@@ -43,6 +43,7 @@ class Simulation:
     """
     
     self.cnt = cnt
+    self.ball = cnt.ball if ball is None else ball
     self.t_max = t_max
     
     if x0 is None:
@@ -64,10 +65,6 @@ class Simulation:
     s += f"\tt_max: {self.t_max}\n"
     s += f"\tx0: {self.x0}\n"
     return s
-  
-  @property
-  def ball(self):
-    return self.cnt.ball
   
   def run_dt(self, plotting=True, fname="sim.dill"):
     """ Run in timestepping mode
@@ -282,7 +279,7 @@ class Simulation:
     t, x, u, ym = self.xeval(t=t_eval)
     
     if ym is None:
-      ym = [self.cnt.ball.measure(xi, ui) for (xi, ui) 
+      ym = [self.ball.measure(xi, ui) for (xi, ui) 
         in zip(x, u)] # NOTE: x.T ?
 
     # Plot state vector as a function of time
@@ -337,6 +334,8 @@ class SerializableSim:
     # Make cnt.ball serializable
     self.cnt = self.cnt.serializable()
     # self.cnt.ball = sim.cnt.ball.serializable()
+    # Make sim.ball serializable
+    self.ball = sim.ball.serializable()
   
   def to_sim(self):
     """
@@ -346,6 +345,7 @@ class SerializableSim:
     # Convert the SerializableBall in controller back to a CMGBall
     self.cnt = self.cnt.from_serializable()
     # self.cnt.ball = self.cnt.ball.to_ball()
+    self.ball = self.ball.to_ball()
     
     sim = Simulation(self.cnt, t_max=self.t_max, x0=self.x0)
     sim.status = self.status

@@ -3,7 +3,7 @@ CMGBall class to hold parameters of the robot
 """
 import numpy as np
 import quaternion
-from util import sharpn, flatn, ISOnow
+from util import sharpn, flatn, ISOnow, noisy
 import dynamics as dyn
 from diff import FD # Finite differencing
 
@@ -19,6 +19,11 @@ class CMGBall:
   n_u = 1 # Number of inputs. Currently only n_u=1 is supported
   n_ym = 6 #10 # Number of measurements.
   g = 9.8 # Gravity
+  # Magnitude of sensor noise
+  accel_noise = 1e-4
+  gyro_noise = 1e-4
+  mag_noise = 5 * np.pi/180
+  encoder_noise = 1e-6
   
   def __init__(self, Is=.001, Ig1=.001, Ig2=.001, m=1, Rs=0.05, Omega_g=600, 
       km=10, ra=np.array([0, 0, 0]), lams=None):
@@ -44,7 +49,6 @@ class CMGBall:
     self.m = m
     self.Rs = Rs
     self.Omega_g = Omega_g
-    self.alphadd_max = km
     """
     The physical system maps pwm to voltage to alpha motor torque and from
     torque to acceleration.
@@ -53,6 +57,7 @@ class CMGBall:
     including the effects of the gearbox.
     """
     self.km = km
+    self.alphadd_max = self.km
     self.ra = ra
     
     if lams is None:
@@ -91,6 +96,22 @@ class CMGBall:
     s += f"\tOmega_g={self.Omega_g}\n"
     s += f"\talphadd_max={self.alphadd_max}\n"
     return s
+  
+  def perturbed(self, perturb):
+    """ Return a new CMGBall object that's the same as this one, but with perturbed parameters
+    perturb: How much to randomly perturb the parameters
+    """
+    
+    return CMGBall(
+      Is=noisy(self.Is, perturb), 
+      Ig1=noisy(self.Ig1, perturb), 
+      Ig2=noisy(self.Ig2, perturb), 
+      m=noisy(self.m, perturb), 
+      Rs=noisy(self.Rs, perturb), 
+      Omega_g=noisy(self.Omega_g, perturb), 
+      km=noisy(self.km, perturb), 
+      ra=noisy(self.ra, perturb), 
+      lams=None)
   
   def serializable(self):
     """ Return a SerializableBall version of this CMGBall
@@ -175,7 +196,7 @@ class CMGBall:
     """
     
     # Redefine measure with augmented xa vector, xa=[x,u]
-    ymf = lambda xa: self.measure(xa[0:11], xa[11], noisy=False, pQ0=False)
+    ymf = lambda xa: self.measure(xa[0:11], xa[11], add_noise=False, pQ0=False)
     x0a = np.concatenate((x, [u]))
     mJ = FD(ymf, x0a)
     mJC = mJ[:,0:11]
@@ -278,7 +299,7 @@ class CMGBall:
   
   def measure(self, x, u, xd=None, 
     sensors=["accel", "gyro"],#, "mag", "encoder"], "pseudoQ"
-    noisy=True, pQ0=True):
+    add_noise=True, pQ0=True):
     """ Simulate a sensor measurement at the given state
     
     pseudoQ: Pseudo-measurement that keeps |q| = 1
@@ -346,8 +367,8 @@ class CMGBall:
         rdd_a = rdd_s__a + rdd_ars
         
         # ADD NOISE
-        if noisy:
-          rdd_a += (np.random.rand(3)*2-1) * 1e-3
+        if add_noise:
+          rdd_a = noisy(rdd_a, self.accel_noise)
         
         outputs.append(rdd_a)
       
@@ -356,8 +377,8 @@ class CMGBall:
         omega_s__s = np.copy(x[4:7])
         
         # ADD NOISE
-        if noisy:
-          omega_s__s += (np.random.rand(3)*2-1) * 1e-3
+        if add_noise:
+          omega_s__s = noisy(omega_s__s, self.gyro_noise)
         
         outputs.append(omega_s__s)
       
@@ -371,11 +392,21 @@ class CMGBall:
         # Convert to the a-frame
         north__a = flatn(q_sa * q_s0.conjugate() * 
           sharpn(north__0) * q_s0 * q_sa.conjugate())
+        
+        # ADD NOISE
+        if add_noise:
+          north__a = noisy(north__a, self.mag_noise)
+        
         outputs.append(north__a)
       
       if sensor == "encoder":
         # Measure the angle alpha
         alpha = x[9]
+        
+        # ADD NOISE
+        if add_noise:
+          alpha = noisy(alpha, self.encoder_noise)
+        
         outputs.append([alpha])
     
     # Return all sensor data as a single (n_ym,) array
