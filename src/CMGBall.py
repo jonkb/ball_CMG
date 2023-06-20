@@ -613,8 +613,8 @@ if __name__ == "__main__":
   
   
   # Observer testing
-  from Controller import Observer
-  obs = Observer(ball, x0)
+  from Observer import Luenberger
+  obs = Luenberger(ball, x0)
   obs.update_ABCDL(x0, u)
   quit()
   

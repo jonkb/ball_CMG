@@ -20,7 +20,7 @@ import scipy.integrate as spi
 import dill
 from Plotter import PlotterX, AnimatorXR, plot_anim, plot_tym
 from diff import rk4
-from Controller import Observer
+from Observer import Luenberger, ObsML
 
 class Simulation:
   status = "unsolved"
@@ -54,7 +54,8 @@ class Simulation:
     # Initialize observer
     # Add uncertainty to observer x0
     x0u = x0 + (np.random.rand(x0.size)*2-1) * self.x0unc
-    self.obs = Observer(cnt.ball, x0u)
+    # self.obs = Luenberger(cnt.ball, x0u)
+    self.obs = ObsML(cnt.ball, x0u)
   
   def __str__(self):
     s = "Simulation Object\n"
