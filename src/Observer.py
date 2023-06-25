@@ -13,11 +13,15 @@ import control
 from diff import rk4
 from util import cleanup_versor
 
+
 class Observer:
   """ Parent class, not to be instantiated
   """
   
+  dt_obs = 0.001
   nx = 11
+  x_subset = np.array([0,1,2,3,4,5,6,9,10]) # Focus on q, omega, and alpha
+  n_xhat = x_subset.size
   # Limits on quantities in xhat
   xhat_max = np.array([1.,1.,1.,1., 20.,20.,20., np.inf,120.])
   
@@ -43,14 +47,12 @@ class Observer:
       # Enforce limits
       x_hat = np.maximum(np.minimum(x_hat, self.xhat_max), -self.xhat_max)
     return x_hat
-  
 
 class Luenberger(Observer):
   """ Luenberger observer. To be used by the controllers.
   """
   
   dt_obs = 0.001
-  x_subset = np.array([0,1,2,3,4,5,6,9,10]) # Focus on q, omega, and alpha
   # x_subset = np.array([0,1,2,3,4,5,6]) # Not estimating alpha
   # x_subset = np.arange(11)
   # 
@@ -286,11 +288,9 @@ class ObsML(Observer):
   """
   
   dt_obs = 0.001
-  x_subset = np.array([0,1,2,3,4,5,6,9,10]) # Focus on q, omega, and alpha
-  n_xhat = x_subset.size
   # How many points to sample in 19-D (x, xhat, u) space. 
   #   72 would be every 5 deg if each of x were an euler angle
-  n_state_sample = 360*19
+  n_state_sample = 10*360*19
   # Bounds for that sample
   omega_max = 6*np.pi
   u_max = 1
@@ -322,7 +322,7 @@ class ObsML(Observer):
     # Generate data to train NN on
     #   This step is pretty fast: ~0.5s
     print(315)
-    features, xhd_des = self.gen_opt_data()
+    features, f_des = self.gen_opt_data()
     # Augment the feature space
     poly = PolynomialFeatures(2, interaction_only=True)
     features = poly.fit_transform(features)
@@ -334,17 +334,17 @@ class ObsML(Observer):
     self.reg = linear_model.Ridge()
     # self.reg = neural_network.MLPRegressor(max_iter=5000,
       # hidden_layer_sizes=self.hidden_layer_sizes)
-    self.model = self.reg.fit(features, xhd_des)
+    self.model = self.reg.fit(features, f_des)
     
     if True:
       print(323)
       # Evaluate the model performance
       y_pred = self.model.predict(features)
-      residuals = y_pred - xhd_des
-      r2 = 1 - np.var(residuals) / np.var(xhd_des - xhd_des.mean())
+      residuals = y_pred - f_des
+      r2 = 1 - np.var(residuals) / np.var(f_des - f_des.mean())
       print(f"r^2: {r2}")
       
-      cv_scores = cross_validate(self.reg, features, xhd_des, cv=4, 
+      cv_scores = cross_validate(self.reg, features, f_des, cv=5, 
         scoring="r2", return_train_score=True)
       # print(cv_scores)
       print(cv_scores["train_score"].mean())
@@ -370,7 +370,8 @@ class ObsML(Observer):
   def gen_opt_data(self):
     """ Generate the dataset used to train the NN observer
     
-    Feature space: xhat, u, ym
+    Feature space: xhat, u, ym_err
+      ym_err = ym - ymhat = ym - fm(xhat, u)
     Output: xhat-dot
     """
     
@@ -381,9 +382,10 @@ class ObsML(Observer):
     sample = sampler.random(n=self.n_state_sample)
     states = qmc.scale(sample, self.state_lb, self.state_ub)
     
-    # xhat-dot desired
-    xhd_des = np.empty((self.n_state_sample, self.n_xhat))
-    ym = np.empty((self.n_state_sample, self.ball.n_ym))
+    # Observer function
+    #   xhat-dot desired = f_eom + f_des
+    f_des = np.empty((self.n_state_sample, self.n_xhat))
+    ym_err = np.empty((self.n_state_sample, self.ball.n_ym))
     for i, state in enumerate(states):
       # Unpack
       x = state[0:self.n_xhat]
@@ -393,21 +395,23 @@ class ObsML(Observer):
       # ONLY SUPPORTS 1 input for now TODO
       u = state[2*self.n_xhat:][0]
       # Run through EOM
-      xd = self.ball.eom(self.augment_xhat(x), u)[self.x_subset]
-      ym[i,:] = self.ball.measure(self.augment_xhat(x), u, xd=xd, 
-        add_noise=False)
+      ym = self.ball.measure(self.augment_xhat(x), u, 
+        add_noise=False) # "actual" measurement
+      ym_hat = self.ball.measure(self.augment_xhat(x_hat), u, 
+        add_noise=False) # observer-predicted measurement
+      ym_err[i,:] = ym - ym_hat
       # This should make the error dynamics stable if obs_pole < 0
-      xhd_des[i,:] = xd - self.obs_pole*(x-x_hat)
+      f_des[i,:] = - self.obs_pole*(x-x_hat)
     
     # Feature space: xhat, u, ym
     features = np.hstack([
       states[:, self.n_xhat:2*self.n_xhat], #xhat
       np.vstack(states[:, 2*self.n_xhat]), #u
-      ym])
-      
-    print(features.shape)
+      ym_err])
     
-    return features, xhd_des
+    print(407, features.shape, f_des.shape)
+    
+    return features, f_des
   
   def update(self, y_m, u):
     """ Update the state estimate
@@ -428,15 +432,20 @@ class ObsML(Observer):
       faster to evaluate though
     """
     
-    print(x_hat.shape, y_m.shape)
+    f_eom = self.ball.eom(self.augment_xhat(x_hat), u)
+    ym_nlpred = self.ball.measure(self.augment_xhat(x_hat), u, xd=f_eom, 
+      add_noise=False)
+    ym_err = y_m - ym_nlpred
     
+    # print(435, x_hat.shape, y_m.shape)
     # Use the trained model to get x-hat-dot
-    x_in = np.concatenate([x_hat, [u], y_m]).reshape(1,-1)
+    x_in = np.concatenate([x_hat, [u], ym_err]).reshape(1,-1)
     # Augment the feature space
     poly = PolynomialFeatures(2, interaction_only=True)
     features = poly.fit_transform(x_in)
-    xhd = self.model.predict(features)[0]
+    f_obs = self.model.predict(features)[0]
     # print(439, xhd)
+    xhd = f_eom[self.x_subset] + f_obs
     # print(xhd.shape)
     xhd = self.cleanup_xhat(xhd)
     return xhd
@@ -631,7 +640,6 @@ if __name__ == "__main__":
   
   obs = ObsML(ball, x0)
   # obs.prm_sweep()
-  obs.setup()
   quit()
   
   obs_harm_test()

@@ -99,30 +99,35 @@ class Ball:
 
 if __name__ == "__main__":
   ball = Ball()
+  ball.R_G = 19e-3
+  ball.t_G = 16e-3
   ball.run_general()
   ball.run_omega()
   ball.run_alpha()
   ball.run_shaft_stress()
   
-  ball_list = []
-  # v_mu = np.linspace(0.001, 0.1, 100)
-  v_x = np.linspace(10e-3, 35e-3, 100)
-  for xi in v_x:
-    ball = Ball()
-    ball.disp = False
-    # ball.mu = xi
-    ball.R_G = xi
-    ball.run_all()
-    ball_list.append(ball)
   
-  labels = ["KE", "wdot", "eta_B", "eta_bF"] # , "Hd"
-  outputs = [[getattr(ball, label) for label in labels] 
-    for ball in ball_list]
-  
-  from matplotlib import pyplot as plt
-  fig, ax = plt.subplots()
-  ax.grid()
-  lines = ax.plot(v_x, outputs)
-  fig.legend(lines, labels)
-  fig.show()
-  input("DONE")
+  if False:
+
+    ball_list = []
+    # v_mu = np.linspace(0.001, 0.1, 100)
+    v_x = np.linspace(10e-3, 35e-3, 100)
+    for xi in v_x:
+      ball = Ball()
+      ball.disp = False
+      # ball.mu = xi
+      ball.R_G = xi
+      ball.run_all()
+      ball_list.append(ball)
+
+    labels = ["KE", "wdot", "eta_B", "eta_bF"] # , "Hd"
+    outputs = [[getattr(ball, label) for label in labels] 
+      for ball in ball_list]
+
+    from matplotlib import pyplot as plt
+    fig, ax = plt.subplots()
+    ax.grid()
+    lines = ax.plot(v_x, outputs)
+    fig.legend(lines, labels)
+    fig.show()
+    input("DONE")
