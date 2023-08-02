@@ -25,6 +25,13 @@ class Observer:
   # Limits on quantities in xhat
   xhat_max = np.array([1.,1.,1.,1., 20.,20.,20., np.inf,120.])
   
+  def __init__(self, ball, x0):
+    self.ball = ball
+    self.nx = ball.n_x
+    self.x_hat = np.copy(x0)
+    self.x_hat = self.x_hat[self.x_subset]
+    
+  
   def augment_xhat(self, x_hat):
     """ Convert a subset x-vector x_hat to a full state vector
     """
@@ -110,11 +117,7 @@ class Luenberger(Observer):
          2.58119226e-02, -1.91773086e+00, -1.39421669e+00]])
   
   def __init__(self, ball, x0):
-    self.ball = ball
-    self.nx = ball.n_x
-    # Initialize state estimate
-    self.x_hat = np.copy(x0)
-    self.x_hat = self.x_hat[self.x_subset]
+    super().__init__(ball, x0)
     # Settings (TODO: make prms)
     # desired observer poles
     zeta_obs1 = 0.9
@@ -137,12 +140,17 @@ class Luenberger(Observer):
       [1, -p_obs5])
     self.des_obsv_poles = np.roots(des_obsv_char_poly)
   
-  def update(self, y_m, u):
+  def update(self, y_m, u, dt=None):
     """ Update the state estimate
     
     y_m - measurement
     u - last control input
+    dt (optional) - timestep
     """
+    
+    if dt is None:
+      dt = self.dt_obs
+    
     # In the future, maybe only update the linearization every once in a while
     self.update_ABCDL(self.x_hat, u)
     
@@ -151,7 +159,7 @@ class Luenberger(Observer):
     # quit()
     
     # Integrate the observer ODE
-    raw_x_hat = rk4(self.xhdot, self.x_hat, self.dt_obs, (y_m,u))
+    raw_x_hat = rk4(self.xhdot, self.x_hat, dt, (y_m,u))
     # print(380, raw_x_hat)
     # q = cleanup_versor(np.quaternion(*raw_x_hat[0:4]))
     # print(382, q.w, q.x, q.y, q.z)
@@ -304,10 +312,7 @@ class ObsML(Observer):
   hidden_layer_sizes = (4,)
   
   def __init__(self, ball, x0):
-    self.x_hat = np.copy(x0)
-    self.x_hat = self.x_hat[self.x_subset]
-    self.ball = ball
-    self.nx = ball.n_x
+    super().__init__(ball, x0)
     # Train & store model
     self.setup()
   
@@ -413,15 +418,18 @@ class ObsML(Observer):
     
     return features, f_des
   
-  def update(self, y_m, u):
+  def update(self, y_m, u, dt=None):
     """ Update the state estimate
     
     y_m - measurement
     u - last control input
     """
     
+    if dt is None:
+      dt = self.dt_obs
+    
     # Integrate the observer ODE
-    raw_x_hat = rk4(self.xhdot, self.x_hat, self.dt_obs, (y_m,u))
+    raw_x_hat = rk4(self.xhdot, self.x_hat, dt, (y_m,u))
     self.x_hat = self.cleanup_xhat(raw_x_hat)
     return self.augment_xhat(self.x_hat)
   
@@ -447,8 +455,33 @@ class ObsML(Observer):
     # print(439, xhd)
     xhd = f_eom[self.x_subset] + f_obs
     # print(xhd.shape)
-    xhd = self.cleanup_xhat(xhd)
+    # xhd = self.cleanup_xhat(xhd) -- BAD!
     return xhd
+
+class ObsSim(Observer):
+  """ Pure simulation, ignoring sensors
+  """
+  
+  def update(self, y_m, u, dt=None):
+    """ Update the state estimate
+    
+    y_m - measurement
+    u - last control input
+    """
+    
+    if dt is None:
+      dt = self.dt_obs
+    
+    # Integrate the observer ODE
+    raw_x_hat = rk4(self.xhdot, self.x_hat, dt, (y_m,u))
+    self.x_hat = self.cleanup_xhat(raw_x_hat)
+    return self.augment_xhat(self.x_hat)
+  
+  def xhdot(self, x_hat, y_m, u):
+    f_eom = self.ball.eom(self.augment_xhat(x_hat), u)
+    xhd = f_eom[self.x_subset]
+    return xhd
+  
 
 class Obs_harm:
   """ Luenberger observer for a harmonic oscillator. For testing

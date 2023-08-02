@@ -17,7 +17,7 @@ class CMGBall:
   # Constants
   n_x = 11 # Length of state vector
   n_u = 1 # Number of inputs. Currently only n_u=1 is supported
-  n_ym = 6 #10 # Number of measurements.
+  n_ym = 3 #10 # Number of measurements.
   g = 9.8 # Gravity
   # Magnitude of sensor noise
   accel_noise = 1e-4
@@ -298,7 +298,7 @@ class CMGBall:
     return xd
   
   def measure(self, x, u, xd=None, 
-    sensors=["accel", "gyro"],#, "mag", "encoder"], "pseudoQ"
+    sensors=["accel"],#, "gyro"],#, "mag", "encoder"], "pseudoQ"
     add_noise=True, pQ0=True):
     """ Simulate a sensor measurement at the given state
     

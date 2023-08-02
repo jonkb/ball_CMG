@@ -15,9 +15,11 @@ class PlotterX:
   Can be used interactively or plotted all at once
   """
   
-  def __init__(self, interactive=True, obs=True, t0=0, x0=None, u0=0):
+  def __init__(self, interactive=True, obs=True, t0=0, x0=None, u0=0, 
+      show=True):
     
     self.obs = obs
+    self.show = show
     
     self.setup_fig()
     
@@ -27,20 +29,24 @@ class PlotterX:
         x0 = np.zeros(11)
         x0[0] = 1
       self.init_interactive(t0, x0, u0)
-      self.fig.show()
+      if self.show:
+        self.fig.show()
   
   def setup_fig(self):
     """ Create the figure and set up the labels
     Everything but the data
     Returns fig, axs (axs is a 3x2 grid)
     """
+    
     # Create figure with 3x2 grid
-    self.fig, self.axs = plt.subplots(3,2, sharex=True)
-    # Move & resize
-    mngr = plt.get_current_fig_manager()
-    mngr.window.setGeometry(25,50,1450,900)
-    self.fig.subplots_adjust(left=0.05, right=0.98, bottom=0.09, top=0.96,
-      wspace=.13, hspace=.19)
+    self.fig, self.axs = plt.subplots(3,2, sharex=True, figsize=(14.50,9.00), 
+      dpi = 100)
+    if True:
+      # Move & resize
+      mngr = plt.get_current_fig_manager()
+      mngr.window.setGeometry(25,50,1450,900)
+      self.fig.subplots_adjust(left=0.05, right=0.98, bottom=0.09, top=0.96,
+        wspace=.13, hspace=.19)
     # 0,0 - Input alpha acceleration
     # self.axs[0,0].set_title(r"Input gyro acceleration $\ddot{\alpha}$")
     self.axs[0,0].set_title(r"Input gyro pwm $u$")
@@ -182,8 +188,9 @@ class PlotterX:
     self.axs[1,1].legend(loc='upper left')
     self.axs[2,0].legend(loc='upper left')
     self.axs[2,1].legend(loc='upper left')
-    
-  def update_interactive(self, v_t, v_x, v_u, v_ym, v_xhat=None):
+  
+  def update_interactive(self, v_t, v_x=None, v_u=None, v_ym=None, 
+      v_xhat=None):
     
     for handle in self.handles.values():
       # They all have the same xdata
@@ -191,25 +198,28 @@ class PlotterX:
     
     # alphadd / u
     self.handles["alphadd"].set_ydata(v_u)
-    # alpha & alpha-dot
-    self.handles["alpha"].set_ydata(v_x[:,9])
-    self.handles["alphad"].set_ydata(v_x[:,10])
-    # q
-    self.handles["q0"].set_ydata(v_x[:,0])
-    self.handles["q1"].set_ydata(v_x[:,1])
-    self.handles["q2"].set_ydata(v_x[:,2])
-    self.handles["q3"].set_ydata(v_x[:,3])
-    qnorm = np.linalg.norm(v_x[:,0:4], axis=1)
-    self.handles["qn"].set_ydata(qnorm)
-    # omega_s
-    self.handles["wx"].set_ydata(v_x[:,4])
-    self.handles["wy"].set_ydata(v_x[:,5])
-    self.handles["wz"].set_ydata(v_x[:,6])
-    wnorm = np.linalg.norm(v_x[:,4:7], axis=1)
-    self.handles["wn"].set_ydata(wnorm)
-    # r_x & r_y
-    self.handles["rx"].set_ydata(v_x[:,7])
-    self.handles["ry"].set_ydata(v_x[:,8])
+    
+    if v_x is not None:
+      # alpha & alpha-dot
+      self.handles["alpha"].set_ydata(v_x[:,9])
+      self.handles["alphad"].set_ydata(v_x[:,10])
+      # q
+      self.handles["q0"].set_ydata(v_x[:,0])
+      self.handles["q1"].set_ydata(v_x[:,1])
+      self.handles["q2"].set_ydata(v_x[:,2])
+      self.handles["q3"].set_ydata(v_x[:,3])
+      qnorm = np.linalg.norm(v_x[:,0:4], axis=1)
+      self.handles["qn"].set_ydata(qnorm)
+      # omega_s
+      self.handles["wx"].set_ydata(v_x[:,4])
+      self.handles["wy"].set_ydata(v_x[:,5])
+      self.handles["wz"].set_ydata(v_x[:,6])
+      wnorm = np.linalg.norm(v_x[:,4:7], axis=1)
+      self.handles["wn"].set_ydata(wnorm)
+      # r_x & r_y
+      self.handles["rx"].set_ydata(v_x[:,7])
+      self.handles["ry"].set_ydata(v_x[:,8])
+    
     # accelerometer
     self.handles["ym0"].set_ydata(v_ym[:,0])
     self.handles["ym1"].set_ydata(v_ym[:,1])
@@ -241,9 +251,11 @@ class PlotterX:
     for ax in self.axs.flatten():
       ax.relim()
       ax.autoscale()
-    # Pause so it can update the display
-    # self.fig.canvas.draw_idle()
-    plt.pause(0.002)
+    
+    if self.show:
+      # Pause so it can update the display
+      # self.fig.canvas.draw_idle()
+      plt.pause(0.002)
 
 class AnimatorXR:
   """ Animator for position and reference
