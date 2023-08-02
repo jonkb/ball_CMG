@@ -27,14 +27,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 from queue import Queue
 from threading import Thread
-import tkinter as tk
 import numpy as np
 import time
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from Observer import ObsSim
 from CMGBall import CMGBall
 from Plotter import PlotterX
+from GUI import GUI
 
 hostName = ""
 serverPort = 8888
@@ -71,6 +70,15 @@ def run_server(obs, queue_u):
         self.send_header("Content-type", "text/plain")
         self.end_headers()
     
+    def send_u(self, u):
+      # The ESP32 converts this to 0-256 int, so .3f should be plenty
+      res = f"{u[0]:.3f},{u[1]:.3f}"
+      # Send res
+      self.send_response(200)
+      self.send_header("Content-type", "text/plain")
+      self.end_headers()
+      self.wfile.write(bytes(res, "utf-8"))
+    
     def get_accel_update(self, query):
       """ Handler for GET /accel?ax=...
       """
@@ -94,14 +102,12 @@ def run_server(obs, queue_u):
       while not queue_u.empty():
         # FIFO --> Only the most recent one will matter
         u = queue_u.get()
+        if isinstance(u, str) and u == "KILL":
+          # TODO: This isn't working
+          self.send_u([0,0])
+          server.shutdown()
       
-      # The ESP32 converts this to 0-256 int, so .3f should be plenty
-      res = f"{u[0]:.3f},{u[1]:.3f}"
-      # Send res
-      self.send_response(200)
-      self.send_header("Content-type", "text/plain")
-      self.end_headers()
-      self.wfile.write(bytes(res, "utf-8"))
+      self.send_u(u)
     
     def log_message(self, format, *args):
       # Override default logging method
@@ -167,17 +173,6 @@ class ObsPlot:
       # self.animator.update(v_t[0:i+1], v_x[0:i+1])
       self.plotter.axs[2,0].set_xlim(-self.t_window,0)
 
-class Tk_rt(tk.Tk):
-  #Wrapper for tk.Tk() incorporating the title and icon already
-	ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../img/phys.ico")
-	def __init__(self, title):
-		super().__init__()
-		self.title(title)
-		try:
-			self.iconbitmap(self.ico_path)
-		except:
-			print("Error loading icon ("+ico_path+")")
-
 if __name__ == "__main__":
   
   # Parameters for simulation -- TODO: Update these
@@ -198,27 +193,6 @@ if __name__ == "__main__":
   
   
   ## Set up GUI
-  #Root window
-  root = Tk_rt("CMGBall")
+  gui = GUI(queue_u, obsp.plotter.fig)
+  gui.mainloop()
   
-  #Main frame: container for everything else
-  main_frm = tk.Frame(root)
-  main_frm.pack(fill=tk.BOTH, expand=1)
-  
-  # TODO: Controller GUI that pushes to queue_u
-  
-  # Canvas to hold figure
-  canvas = FigureCanvasTkAgg(obsp.plotter.fig, master=root)
-  canvas.draw()
-  
-  # placing the canvas on the Tkinter window
-  canvas.get_tk_widget().pack()
-  
-  # creating the Matplotlib toolbar
-  # toolbar = NavigationToolbar2Tk(canvas, root)
-  # toolbar.update()
-  # placing the toolbar on the Tkinter window
-  # canvas.get_tk_widget().pack()
-  
-  #Start GUI interaction loop
-  root.mainloop()
