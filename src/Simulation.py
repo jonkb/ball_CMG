@@ -31,9 +31,9 @@ class Simulation:
   #   For best performance, the other 'dt's should be integer multiples 
   #   of dt_dyn.
   dt_dyn = 0.0005
-  dt_plt = 0.005
+  dt_plt = 0.01
   # x0 uncertainty
-  x0unc = 1e-9
+  x0unc = 1e-6
   
   def __init__(self, cnt, ball=None, t_max=1, x0=None):
     """
@@ -54,8 +54,8 @@ class Simulation:
     # Initialize observer
     # Add uncertainty to observer x0
     x0u = x0 + (np.random.rand(x0.size)*2-1) * self.x0unc
-    # self.obs = Luenberger(cnt.ball, x0u)
-    self.obs = ObsML(cnt.ball, x0u)
+    self.obs = Luenberger(cnt.ball, x0u)
+    # self.obs = ObsML(cnt.ball, x0u)
   
   def __str__(self):
     s = "Simulation Object\n"

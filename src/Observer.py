@@ -52,7 +52,7 @@ class Luenberger(Observer):
   """ Luenberger observer. To be used by the controllers.
   """
   
-  dt_obs = 0.001
+  dt_obs = 0.01
   # x_subset = np.array([0,1,2,3,4,5,6]) # Not estimating alpha
   # x_subset = np.arange(11)
   # 
