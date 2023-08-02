@@ -3,6 +3,8 @@
 
 import numpy as np
 pi = np.pi
+from scipy import signal
+import matplotlib.pyplot as plt
 
 def get_prnt(disp):
   # Conditional print wrapper
@@ -97,18 +99,52 @@ class Ball:
     self.prnt(f"Bearings safety factor eta_bF = {self.eta_bF}")
   
 
+def saturate(x, lb, ub):
+  return np.maximum(np.minimum(x, ub), lb)
+
+def plt_gear(N, th_lims, R0=4, saw_shift=pi):
+  """ Plot involute gear profile
+  
+  I don't think this is quite right.
+  
+  r(th) = triangle_wave(theta)
+  """
+  
+  v_th = np.linspace(*th_lims, N*100)
+  # Angular wavenumber (?)
+  lam = 1 / N
+  
+  R_th = signal.sawtooth(v_th/lam+saw_shift, .5)
+  R_th = saturate(R_th, -1, 1)
+  
+  v_x = (R0+R_th)*np.cos(v_th)
+  v_y = (R0+R_th)*np.sin(v_th)
+  
+  fig, ax = plt.subplots()
+  ax.plot(v_x, v_y)
+  ax.set_aspect("equal")
+  fig.show()
+  fig.savefig("gear_tmp.png")
+  input("DONE")
+
 if __name__ == "__main__":
-  ball = Ball()
-  ball.R_G = 19e-3
-  ball.t_G = 16e-3
-  ball.run_general()
-  ball.run_omega()
-  ball.run_alpha()
-  ball.run_shaft_stress()
+  
+  # Gear profiles
+  plt_gear(12, [-pi/6, pi/6])
+  
+  if False:
+    ball = Ball()
+    ball.R_G = 19e-3
+    ball.t_G = 16e-3
+    ball.run_general()
+    ball.run_omega()
+    ball.run_alpha()
+    ball.run_shaft_stress()
   
   
   if False:
-
+    # Exploring varying gyro dimensions
+    
     ball_list = []
     # v_mu = np.linspace(0.001, 0.1, 100)
     v_x = np.linspace(10e-3, 35e-3, 100)
