@@ -18,9 +18,10 @@ def setup():
   import dynamics as dyn
   print(" -- Deriving the EOM -- ")
   M, F = dyn.derive_EOM()
-  EOM = dyn.solve_EOM(M, F)
+  #EOM = dyn.solve_EOM(M, F)
   ax, ay = dyn.find_axay()
-  return M, F, EOM, ax, ay
+  return M, F, None, ax, ay
+  #return M, F, EOM, ax, ay
 
 def dt_test():
   alphadd = 0.2
@@ -175,7 +176,8 @@ if __name__ == "__main__":
     toc(times)
     M, F, EOM, ax, ay = setup()
     toc(times, "EOM derivation")
-    
+    quit()
+  
   # Load a pre-generated ball object
   # fname = "ball_20230518T223742.dill"
   # with open(fname,"rb") as file:
@@ -185,10 +187,10 @@ if __name__ == "__main__":
   
   # Load an existing sim from file
   # load_and_plot("MPC_0517_1.dill")
-  # load_and_plot("ST_tmp.dill")
+  load_and_plot("ST_tmp.dill")
   
   # Run a new simulation
-  sim = simple_test()
+  #sim = simple_test()
   # sim = FF_test("0524_1")
   # sim = dt_test()
   # sim = MPC_test("0612_1")

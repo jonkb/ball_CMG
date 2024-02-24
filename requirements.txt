@@ -1,5 +1,8 @@
 numpy
+numpy-quaternion
 sympy
 scipy
 matplotlib
 dill
+scikit-learn # Maybe phase out if using JAX
+control
