@@ -10,6 +10,7 @@ def plot_states(sol, ball):
     """ Generate plots of the ball state over time
     """
     Nt = sol.ts.size
+    Nq = ball.Nq
     fig, axs = plt.subplots(3,2, sharex=True, figsize=(14.0,9.0))
 
     # Set up subplots
@@ -29,8 +30,8 @@ def plot_states(sol, ball):
     axs[0,0].legend()
     
     # Plot: Velocity
-    axs[0,1].plot(sol.ts, sol.ys[:,6], label=r"$\dot{x}$")
-    axs[0,1].plot(sol.ts, sol.ys[:,7], label=r"$\dot{y}$")
+    axs[0,1].plot(sol.ts, sol.ys[:,Nq], label=r"$\dot{x}$")
+    axs[0,1].plot(sol.ts, sol.ys[:,Nq+1], label=r"$\dot{y}$")
     axs[0,1].legend()
 
     # Plot: Orientation
@@ -41,14 +42,14 @@ def plot_states(sol, ball):
     axs[1,0].legend()
 
     # Plot: Quaternion rates
-    axs[1,1].plot(sol.ts, sol.ys[:,8], label=r"$\dot{\eta}$")
-    axs[1,1].plot(sol.ts, sol.ys[:,9], label=r"$\dot{\epsilon}_x$")
-    axs[1,1].plot(sol.ts, sol.ys[:,10], label=r"$\dot{\epsilon}_y$")
-    axs[1,1].plot(sol.ts, sol.ys[:,11], label=r"$\dot{\epsilon}_z$")
+    axs[1,1].plot(sol.ts, sol.ys[:,Nq+2], label=r"$\dot{\eta}$")
+    axs[1,1].plot(sol.ts, sol.ys[:,Nq+3], label=r"$\dot{\epsilon}_x$")
+    axs[1,1].plot(sol.ts, sol.ys[:,Nq+4], label=r"$\dot{\epsilon}_y$")
+    axs[1,1].plot(sol.ts, sol.ys[:,Nq+5], label=r"$\dot{\epsilon}_z$")
     axs[1,1].legend()
 
     # Plot: Constraint violation
-    cviol = jnp.array([ball.a(sol.ts[ix], sol.ys[ix,0:6])@sol.ys[ix,6:12] 
+    cviol = jnp.array([ball.a(sol.ts[ix], sol.ys[ix,0:ball.Nq])@sol.ys[ix,ball.Nq:] 
         for ix in range(Nt)])
     axs[2,0].plot(sol.ts, cviol[:,0], label=r"$\|Q\|$")
     axs[2,0].plot(sol.ts, cviol[:,1], label=r"non-slip ($x$)")
@@ -56,7 +57,7 @@ def plot_states(sol, ball):
     axs[2,0].legend()
 
     # Plot: Kinetic energy
-    T = jnp.array([ball._T(sol.ts[ix], sol.ys[ix,0:6], sol.ys[ix,6:12])
+    T = jnp.array([ball._T(sol.ys[ix,0:ball.Nq], sol.ys[ix,ball.Nq:])
         for ix in range(Nt)])
     axs[2,1].plot(sol.ts, T, label=r"$T$")
     
@@ -103,10 +104,8 @@ def plot_coords(ax, Q, r, arrow_len=0.1, Q1=None):
     return ah1, ah2, ah3
 
 
-def animate_ball(sol, ball, save_pname=None):
+def animate_ball(sol, ball, save_pname=None, slow_factor=1):
     """ Generate an animation of a CMGBall
-
-    TODO: Add 4th vector for alpha
     """
 
     # Constant parameters
@@ -134,7 +133,9 @@ def animate_ball(sol, ball, save_pname=None):
     q4 = sol.ys[:,3]
     q5 = sol.ys[:,4]
     q6 = sol.ys[:,5]
+    q7 = sol.ys[:,6]
     Nfrm = len(q1)
+    to_blit = save_pname is None
 
     fig, ax = plt.subplots(figsize=figsize)
     #fig.subplots_adjust(*spadj)
@@ -144,11 +145,14 @@ def animate_ball(sol, ball, save_pname=None):
     #lh4, *_ = ax.plot([], [], "-", lw=3, color="b")
     Q0 = Quat(jnp.array([q3[0], q4[0], q5[0], q6[0]]))
     r0 = jnp.array([q1[0], q2[0]])
-    alpha0 = ball.alpha(sol.ts[0])
+    #alpha0 = ball.alpha(sol.ts[0])
+    alpha0 = q7[0]
     Qas = Quat.from_axisangle(alpha0, jnp.array([0,0,1]))
     
     ah1, ah2, ah3, ah4 = plot_coords(ax, Q0, r0, arrow_len=Rs, Q1=Qas)
-    cirh = plt.Circle((0, 0), Rs, fc='b', alpha=0.5)
+    fcol = [0, 0, 0, 0.2]
+    ecol = [0, 0, 0, 0.8]
+    cirh = plt.Circle((0, 0), Rs, fc=fcol, ec=ecol, lw=3)
 
     ax.set_aspect("equal")
     ax.grid()
@@ -166,20 +170,32 @@ def animate_ball(sol, ball, save_pname=None):
         return (ah1, ah2, ah3, ah4, cirh, tth)
 
     def _animate(ifrm):
+        ri = jnp.array([q1[ifrm], q2[ifrm]])
+        if to_blit:
+            # Move center
+            cirh.center = ri
+            cirh1 = cirh
+        else:
+            ax.cla()
+            ax.set_aspect("equal")
+            ax.grid()
+            ax.set_xlim(lims[0])
+            ax.set_ylim(lims[1])
+            cirh1 = plt.Circle(ri, Rs, fc=fcol, ec=ecol, lw=3)
+            ax.add_patch(cirh1)
+        
         ti = sol.ts[ifrm]
         frm_lbl = f"Frame {ifrm:04}/{Nfrm}: t={ti:.3f}/{sol.ts[-1]:.3f}"
         tth = ax.text(x=p_txt[0], y=p_txt[1], s=frm_lbl, fontfamily=fontfam,
             backgroundcolor=c_bg)
         
-        # Move center
-        ri = jnp.array([q1[ifrm], q2[ifrm]])
-        cirh.center = ri
         # Move coordinate frame arrows
         Qi = Quat(jnp.array([q3[ifrm], q4[ifrm], q5[ifrm], q6[ifrm]]))
-        alphai = ball.alpha(ti)
+        #alphai = ball.alpha(ti)
+        alphai = q7[ifrm]
         Qas = Quat.from_axisangle(alphai, jnp.array([0,0,1]))
         ah1, ah2, ah3, ah4 = plot_coords(ax, Qi, ri, arrow_len=Rs, Q1=Qas)
-        return (ah1, ah2, ah3, ah4, cirh, tth)
+        return (ah1, ah2, ah3, ah4, cirh1, tth)
 
     ani = FuncAnimation(
         fig,
@@ -187,16 +203,23 @@ def animate_ball(sol, ball, save_pname=None):
         init_func=_init,
         frames=Nfrm,
         interval=1,
-        blit=True,
+        blit=to_blit,
     )
 
     if save_pname is not None:
-        ani.save(save_pname, writer="pillow", fps=30)
+        fps = Nfrm / sol.ts[-1] / slow_factor
+        prog_cb = lambda i, n: print(f'Saving frame {i}/{n}')
+        #ani.save(save_pname, writer="pillow", fps=30,
+        #    progress_callback=prog_cb)
+        ani.save(save_pname, writer="ffmpeg", fps=fps,
+            progress_callback=prog_cb)
+        print(f"Video saved to {save_pname}")
     else:
         plt.show()
 
 
 if __name__ == "__main__":
+    # Testing plot_coords
     fig, ax = plt.subplots()
     Q = Quat.from_axisangle(10*jnp.pi/180, [1,1,1])
     r = jnp.array([2,3])

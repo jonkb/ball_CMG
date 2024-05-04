@@ -129,8 +129,43 @@ def plt_gear(N, th_lims, R0=4, saw_shift=pi):
 
 if __name__ == "__main__":
   
+  if False:
+    # Inertia
+    Rs = 0.080
+    ts = 0.002
+    rho_pla = 1300 # kg/m^3
+    infill = 0.5
+    ms = 4*pi/3 * ((Rs+ts/2)**3 - (Rs-ts/2)**3) * rho_pla * infill
+    print(f"m_s = {ms:.6f}kg")
+    Is = 2/3 * ms * Rs**2
+    print(f"I_s = {Is:.6f}kg m^2")
+    Ii = 0.150 * 0.030**2
+    print(f"I_i = {Ii:.6f}kg m^2")
+    print(f"I_s + I_i = {Is + Ii:.6f}kg m^2")
+
+    # Flywheel inertia
+    rho_steel = 7900
+    Rfw = 0.038/2
+    hfw = 0.016
+    mfw = pi*Rfw**2 * hfw * rho_steel
+    Ifw1 = mfw/2 * Rfw**2
+    Ifw2 = mfw/12 * (3*Rfw**2 + hfw**2)
+    Rsf = 0.00635/2
+    hsf = 0.030
+    msf = pi*Rsf**2 * hsf * rho_steel
+    Isf1 = msf/2 * Rsf**2
+    Isf2 = msf/12 * (3*Rsf**2 + hsf**2)
+    #print(Ifw1, Isf1)
+    mg = mfw + msf
+    print(f"mg = {mg}")
+    Ig1 = Ifw1 + Isf1
+    Ig2 = Ifw2 + Isf2
+    print(f"Ig = [{Ig1}, {Ig2}]")
+
+
   # Gear profiles
-  plt_gear(12, [-pi/6, pi/6])
+  if False:
+    plt_gear(12, [-pi/6, pi/6])
   
   if False:
     ball = Ball()
@@ -142,7 +177,7 @@ if __name__ == "__main__":
     ball.run_shaft_stress()
   
   
-  if False:
+  if True:
     # Exploring varying gyro dimensions
     
     ball_list = []
@@ -156,7 +191,8 @@ if __name__ == "__main__":
       ball.run_all()
       ball_list.append(ball)
 
-    labels = ["KE", "wdot", "eta_B", "eta_bF"] # , "Hd"
+    #labels = ["KE", "wdot", "eta_B", "eta_bF"] # , "Hd"
+    labels = ["omega", "wdot", "eta_B", "eta_bF"]
     outputs = [[getattr(ball, label) for label in labels] 
       for ball in ball_list]
 
