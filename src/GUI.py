@@ -9,7 +9,8 @@ import tkinter.ttk as ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 
-ico_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../img/phys.ico")
+ico_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(
+  __file__)), "../img/phys.ico"))
 
 class ToolTip:
   def __init__(self, widget, text):
@@ -114,6 +115,8 @@ class PltWin(tk.Toplevel):
     # General setup: Title & icon
     self.title("CMGBall Data Plotter")
     try:
+      # TODO: bitmap "/home/jonkb/Dropbox/Documents/Engineering/ball_CMG/simulation/py/img/phys.ico" not defined
+      # Maybe needs a .xbm for Unix
       self.iconbitmap(ico_path)
     except:
       print("Error loading icon ("+ico_path+")")

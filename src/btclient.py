@@ -1,14 +1,18 @@
-""" HTTP server to communicate with robot
+""" Bluetooth client for communication with robot
+
+TODO: Switch over to Bluetooth & async framework
 
 Premise:
-* Robot periodically reports its measurements and expects motor commands
+* The ESP32 is a Bluetooth server, and it publishes two "characteristics"
+  * ACCEL: The robot posts its accel measurements here
+  * SPEED: This one is writable, so the laptop can send motor commands
 * Main loop runs on laptop, updating simulation & plots at a constant dt
-* Separate thread is running server. When a GET request comes in, send those
-  measurements to update the observer and return the current motor commands
-  from the controller.
+* When a notification comes with new ACCEL measurements, update the observer.
+* When the user changes the speeds via the GUI, write to SPEED
 
 Message passing between threads:
 * ym queue: server posts messages to a queue that the Observer is listening to
+(OLD)
 * u queue: Controller posts control updates to this queue. The HTTP server 
   checks this queue for updates before sending motor commands to the ESP32
 
