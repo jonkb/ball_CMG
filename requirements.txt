@@ -3,3 +3,6 @@ sympy
 scipy
 matplotlib
 dill
+numpy-quaternion
+tkinter
+scikit-learn

@@ -4,10 +4,14 @@ Classes for the GUI for controlling the robot
 """
 
 import os
+import time
 import tkinter as tk
 import tkinter.ttk as ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
+
+from Plotter import PlotterX
+from Observer import ObsSim
 
 ico_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(
   __file__)), "../img/phys.ico"))
@@ -146,6 +150,66 @@ class GUI(tk.Tk):
     # Secondary window for plots
     self.plt_win = PltWin(self, fig)
 
+class ObsPlot:
+  """ Observer & plotter
+  """
+  
+  t_window = 30
+  N_window = int(t_window / 0.01)
+  plotting = True
+  
+  def __init__(self, ball):
+    self.ball = ball
+    self.t0 = time.time()
+    # Assume starting position of xyz = ENU
+    self.x0 = np.zeros(11)
+    self.x0[0] = 1 # Real part of Q starts at 1
+    self.obs = ObsSim(ball, self.x0)
+    if self.plotting:
+      # History arrays for plotting
+      self.v_t = np.zeros(self.N_window)
+      self.v_u = np.zeros((self.N_window, self.ball.n_u))
+      self.v_ym = np.zeros((self.N_window, self.ball.n_ym))
+      self.v_xhat = np.array(self.N_window * [self.x0])
+      # Set up plotter
+      self.plotter = PlotterX(x0=self.x0, show=False)
+      self.plotter.axs[2,0].set_xlim(-self.t_window,0)
+      # TODO: Animation -- observer doesn't observe rx, ry so it seems weird
+      # self.animator = AnimatorXR(ref=self.cnt.ref, ref_type=self.cnt.ref_type)
+  
+  def update(self, ym, u):
+    
+    # Roll v_t & add current time
+    self.v_t[1:] = self.v_t[0:-1]
+    self.v_t[0] = time.time() - self.t0
+    dt = self.v_t[0] - self.v_t[1]
+    
+    # Update observer
+    x_hat = self.obs.update(ym, u[1], dt)
+    # TODO: len of u: 2 vs 1
+    
+    # Update controler - TODO
+    
+    if self.plotting:
+      # Roll arrays besides v_t
+      self.v_u[1:] = self.v_u[0:-1]
+      self.v_ym[1:] = self.v_ym[0:-1]
+      self.v_xhat[1:] = self.v_xhat[0:-1]
+      # Store current values
+      self.v_u[0] = u[1] # Previous? TODO
+      self.v_ym[0] = ym
+      self.v_xhat[0] = x_hat
+      # Update plot
+      t_neg = self.v_t - self.v_t[0]
+      self.plotter.update_interactive(t_neg, v_u=self.v_u, v_ym=self.v_ym, 
+        v_xhat=self.v_xhat)
+      # self.animator.update(v_t[0:i+1], v_x[0:i+1])
+      self.plotter.axs[2,0].set_xlim(-self.t_window,0)
+
+def cleanup(gui):
+  gui.destroy()
+  print("EXITING: CLEANUP COMPLETE")
+
 if __name__ == "__main__":
   from queue import Queue
   import matplotlib.pyplot as plt
@@ -153,6 +217,6 @@ if __name__ == "__main__":
   queue_u = Queue()
   fig = plt.figure()
   gui = GUI(queue_u, fig)
-  gui.protocol("WM_DELETE_WINDOW", cleanup)
+  gui.protocol("WM_DELETE_WINDOW", lambda: cleanup(gui))
   gui.mainloop()
   

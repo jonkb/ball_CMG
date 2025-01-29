@@ -26,31 +26,20 @@ Repeating version of threading.Timer class
   https://docs.python.org/3/library/threading.html
 """
 
-import os
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse, parse_qs
 from queue import Queue
 from threading import Thread
 import numpy as np
-import time
 
-from Observer import ObsSim
 from CMGBall import CMGBall
-from Plotter import PlotterX
-from GUI import GUI
+from GUI import GUI, ObsPlot
 
-hostName = ""
-serverPort = 8888
 
-# class Msg_ym:
-  # """ Container object to hold a measurement and the time it was sent
-  # Note: In the future, these timestamps could be based on ESP32 time, and
-    # maybe that'd be better, but it sounds much harder.
-  # """
-  
-  # def __init__(self, ym):
-    # self.ym = ym
-    # self.ts = time.time()
+
+
+# TODO: Copy Bluetooth code & replace HTTP server with Bluetooth client
+
+
+
 
 def run_server(obs, queue_u):
   """ Start the HTTP server
@@ -121,62 +110,6 @@ def run_server(obs, queue_u):
   print("Server started at PORT ", serverPort)
   server.serve_forever()
 
-class ObsPlot:
-  """ Observer & plotter
-  """
-  
-  t_window = 30
-  N_window = int(t_window / 0.01)
-  plotting = True
-  
-  def __init__(self, ball):
-    self.ball = ball
-    self.t0 = time.time()
-    # Assume starting position of xyz = ENU
-    self.x0 = np.zeros(11)
-    self.x0[0] = 1 # Real part of Q starts at 1
-    self.obs = ObsSim(ball, self.x0)
-    if self.plotting:
-      # History arrays for plotting
-      self.v_t = np.zeros(self.N_window)
-      self.v_u = np.zeros((self.N_window, self.ball.n_u))
-      self.v_ym = np.zeros((self.N_window, self.ball.n_ym))
-      self.v_xhat = np.array(self.N_window * [self.x0])
-      # Set up plotter
-      self.plotter = PlotterX(x0=self.x0, show=False)
-      self.plotter.axs[2,0].set_xlim(-self.t_window,0)
-      # TODO: Animation -- observer doesn't observe rx, ry so it seems weird
-      # self.animator = AnimatorXR(ref=self.cnt.ref, ref_type=self.cnt.ref_type)
-  
-  def update(self, ym, u):
-    
-    # Roll v_t & add current time
-    self.v_t[1:] = self.v_t[0:-1]
-    self.v_t[0] = time.time() - self.t0
-    dt = self.v_t[0] - self.v_t[1]
-    
-    # Update observer
-    x_hat = self.obs.update(ym, u[1], dt)
-    # TODO: len of u: 2 vs 1
-    
-    # Update controler - TODO
-    
-    if self.plotting:
-      # Roll arrays besides v_t
-      self.v_u[1:] = self.v_u[0:-1]
-      self.v_ym[1:] = self.v_ym[0:-1]
-      self.v_xhat[1:] = self.v_xhat[0:-1]
-      # Store current values
-      self.v_u[0] = u[1] # Previous? TODO
-      self.v_ym[0] = ym
-      self.v_xhat[0] = x_hat
-      # Update plot
-      t_neg = self.v_t - self.v_t[0]
-      self.plotter.update_interactive(t_neg, v_u=self.v_u, v_ym=self.v_ym, 
-        v_xhat=self.v_xhat)
-      # self.animator.update(v_t[0:i+1], v_x[0:i+1])
-      self.plotter.axs[2,0].set_xlim(-self.t_window,0)
-
 if __name__ == "__main__":
   
   # Parameters for simulation -- TODO: Update these
@@ -192,11 +125,9 @@ if __name__ == "__main__":
   # Create shared queue
   queue_u = Queue()
   # Create & start server thread
-  thread_srv = Thread(target=run_server, args =(obsp, queue_u))
+  thread_srv = Thread(target=run_server, args=(obsp, queue_u))
   thread_srv.start()
-  
   
   ## Set up GUI
   gui = GUI(queue_u, obsp.plotter.fig)
   gui.mainloop()
-  
