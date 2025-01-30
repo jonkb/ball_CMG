@@ -4,11 +4,10 @@ Derive the equations of motion for the robot. It's a sphere with a Control Momen
 The strategy behind the dynamics was mostly adapted from the following paper by Putkaradze & Rogers:
 https://link.springer.com/article/10.1007/s11012-018-0904-5#Sec11
 
-TODO: Change the folder where things are saved by default... maybe.
-
 NOTE: Could train a surrogate for EOMf
 """
 
+import os
 import dill # For saving lambdified functions
 dill.settings['recurse'] = True
 
@@ -17,6 +16,16 @@ from sympy.algebras.quaternion import Quaternion
 from sympy.functions.elementary.complexes import conjugate
 from util import sharp, flat, printv
 import sp_namespace as spn
+
+# Constants
+out_dir = "../../dyn_out"
+pname_M = os.path.join(out_dir, "M.srepr")
+pname_F = os.path.join(out_dir, "F.srepr")
+pname_EOM = os.path.join(out_dir, "EOM.srepr")
+pname_J = os.path.join(out_dir, "J.srepr")
+pname_ax = os.path.join(out_dir, "ax.srepr")
+pname_ay = os.path.join(out_dir, "ay.srepr")
+pname_yma = os.path.join(out_dir, "yma.srepr")
 
 def derive_EOM(save=True):
   """ Derive the equations of motion and save them to file.
@@ -135,10 +144,10 @@ def derive_EOM(save=True):
     ## Save equations to file (plain-text sympy srepr format).
     ##   Saving with pickle or dill didn't work
     printv(1, "Saving to file")
-    with open("M.srepr","w") as file:
+    with open(pname_M, "w") as file:
       M_str = sp.srepr(M)
       file.write(M_str)
-    with open("F.srepr","w") as file:
+    with open(pname_F, "w") as file:
       F_str = sp.srepr(F)
       file.write(F_str)
     printv(1, "M & F saved to file")
@@ -177,10 +186,10 @@ def load_MF():
   Assumes those files exist
   """
   
-  with open("M.srepr", "r") as file:
+  with open(pname_M, "r") as file:
     M_str = file.read()
     M = sp.sympify(M_str)
-  with open("F.srepr", "r") as file:
+  with open(pname_F, "r") as file:
     F_str = file.read()
     F = sp.sympify(F_str)
   return M, F
@@ -207,7 +216,7 @@ def solve_EOM(M=None, F=None, save=True):
   
   if save:
     printv(1, "Saving to file")
-    with open("EOM.srepr","w") as file:
+    with open(pname_EOM, "w") as file:
       omega_dot_str = sp.srepr(omega_dot)
       file.write(omega_dot_str)
     printv(1, "EOM for omega_dot saved to file")
@@ -246,7 +255,7 @@ def load_EOM():
   Assumes that file exists
   """
   
-  with open("EOM.srepr", "r") as file:
+  with open(pname_EOM, "r") as file:
     EOM_str = file.read()
     EOM = sp.sympify(EOM_str)
   return EOM
@@ -296,10 +305,10 @@ def full_J(xdot=None, save=True):
   
   if save:
     printv(1, "Saving to file")
-    with open("J.srepr","w") as file:
+    with open(pname_J, "w") as file:
       J_str = sp.srepr(J)
       file.write(J_str)
-    printv(1, "Jacobian of EOM saved to file: J.srepr")
+    printv(1, f"Jacobian of EOM saved to file: {pname_J}")
   
   return J
 
@@ -341,10 +350,10 @@ def ym_accel(EOM, save=True):
   
   if save:
     printv(1, "Saving to file")
-    with open("yma.srepr","w") as file:
+    with open(pname_yma,"w") as file:
       yma_str = sp.srepr(rdd_a)
       file.write(yma_str)
-    printv(1, "Accelerometer measurement function saved to file: yma.srepr")
+    printv(1, "Accelerometer measurement function saved to file")
   
   return rdd_a
 
@@ -354,7 +363,7 @@ def load_JAB():
   """ Load the Jacobian and split into A & B matrices
   """
   
-  with open("J.srepr", "r") as file:
+  with open(pname_J, "r") as file:
     J_str = file.read()
     J = sp.sympify(J_str)
   
@@ -393,9 +402,9 @@ def find_axay(save=True):
   
   if save:
     printv(1, "Saving to file")
-    with open("ax.srepr","w") as file:
+    with open(pname_ax,"w") as file:
       file.write(sp.srepr(ax))
-    with open("ay.srepr","w") as file:
+    with open(pname_ay,"w") as file:
       file.write(sp.srepr(ay))
     printv(1, "ax & ay saved to file")
   
@@ -406,9 +415,9 @@ def load_axay():
   Assumes those files exist
   """
   
-  with open("ax.srepr", "r") as file:
+  with open(pname_ax, "r") as file:
     ax = sp.sympify(file.read())
-  with open("ay.srepr", "r") as file:
+  with open(pname_ay, "r") as file:
     ay = sp.sympify(file.read())
   return ax, ay
 
@@ -428,6 +437,11 @@ def lambdify_axay(ax, ay, ball):
 
 if __name__ == "__main__":
   sp.init_printing(use_unicode=False, num_columns=180)
+
+  # Derive EOM
+  M, F = derive_EOM(save=True)
+  ax, ay = find_axay(save=True)
+  quit()
   
   # M, F = load_MF()
   # EOM = solve_EOM(M=M, F=F)
@@ -539,6 +553,5 @@ if __name__ == "__main__":
   # For control: state the reference position in the sphere-fixed frame.
   # There's a clear transform from omega to position (in sphere-fixed frame). Er... that's actually tricky bc the sphere rolls. Well, there's an easy transform from omega to velocity in sphere-fixed frame, so at least instantaneously we can do that.
   # Maybe I can linearize the transform from alpha-dot to omega-dot and do a long, fancy cascade. alpha-dot -> omega-dot -> omega -> v__s -> r_0
-  
   
   

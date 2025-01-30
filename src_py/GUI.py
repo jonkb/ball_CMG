@@ -5,6 +5,7 @@ Classes for the GUI for controlling the robot
 
 import os
 import time
+import asyncio
 import tkinter as tk
 import tkinter.ttk as ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -49,9 +50,10 @@ class CtrlFrm(ttk.Frame):
   u_inc = 0.2
   font_H18 = ("Helvetica", 18)
   
-  def __init__(self, root, queue_u):
+  def __init__(self, root, queue_u, asyncloop):
     super().__init__(root)
     self.queue_u = queue_u
+    self.asyncloop = asyncloop
     
     s = ttk.Style()
     s.configure("H18.TButton", font=self.font_H18)
@@ -111,7 +113,8 @@ class CtrlFrm(ttk.Frame):
     elif m == 1:
       self.lbl_u1.config(text=f"{self.u[1]:.3f}")
     # Push this update to the motor speeds queue
-    self.queue_u.put(self.u)
+    # self.queue_u.put(self.u) # OLD
+    asyncio.run_coroutine_threadsafe(self.queue_u.put(self.u.copy()), self.asyncloop)
 
 class PltWin(tk.Toplevel):
   def __init__(self, root, fig):
@@ -134,7 +137,7 @@ class PltWin(tk.Toplevel):
     canvas.get_tk_widget().pack()
 
 class GUI(tk.Tk):
-  def __init__(self, queue_u, fig):
+  def __init__(self, queue_u, fig, asyncloop):
     super().__init__()
     # General setup: Title & icon
     self.title("CMGBall Controls")
@@ -144,7 +147,7 @@ class GUI(tk.Tk):
       print(f"Error loading icon: {ico_path}")
     
     # Controller frame
-    self.ctrl_frm = CtrlFrm(self, queue_u)
+    self.ctrl_frm = CtrlFrm(self, queue_u, asyncloop)
     self.ctrl_frm.pack()
     
     # Secondary window for plots
@@ -211,10 +214,10 @@ def cleanup(gui):
   print("EXITING: CLEANUP COMPLETE")
 
 if __name__ == "__main__":
-  from queue import Queue
+  import asyncio
   import matplotlib.pyplot as plt
   # For testing
-  queue_u = Queue()
+  queue_u = asyncio.Queue()
   fig = plt.figure()
   gui = GUI(queue_u, fig)
   gui.protocol("WM_DELETE_WINDOW", lambda: cleanup(gui))
