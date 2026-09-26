@@ -6,16 +6,22 @@ I'm in the process of documenting the methods here: https://www.overleaf.com/rea
 The strategy behind the dynamics was mostly adapted from the following paper by Putkaradze & Rogers:
 https://link.springer.com/article/10.1007/s11012-018-0904-5#Sec11
 
-# Capabilities
+## Controlling the ESP32 over bluetooth
+Run the following, immediately after turning on the robot:
+```
+ball_CMG/src_py$ python btclient.py
+```
+
+## Capabilities
 1. Derive the EOM
 2. Simulate the path of the robot
 3. Plot simulation results
 4. Optimize the input angle (alpha) to attempt to trace a given path
 
-# Dependencies
+## Dependencies
 See /requirements.txt
 
-# To Do
+## To Do
 * Display simulation parameters after loading from file (especially MPCparams)
 * Fix the relative weighting of position and velocity error in MPC cost
 
